@@ -40,7 +40,7 @@ final class FileScanner
                 path: $path,
                 name: $name,
                 kind: $kind,
-                sha1: sha1_file($path) ?: '',
+                hash: hash_file('sha256', $path) ?: '',
             );
         }
 

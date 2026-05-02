@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace KnLab\PbMigrate\Command;
 
 use KnLab\PbMigrate\Sync\BotSync;
+use KnLab\PbMigrate\Sync\CacheStore;
 use KnLab\PbMigrate\Sync\DiffEngine;
 use KnLab\PbMigrate\Sync\FileScanner;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -22,6 +23,7 @@ final class PushCommand extends AbstractBotCommand
         $this->addOption('dry-run', null, InputOption::VALUE_NONE, 'Show what would change without uploading');
         $this->addOption('skip-compile', null, InputOption::VALUE_NONE, 'Do not run compile after upload');
         $this->addOption('prune', null, InputOption::VALUE_NONE, 'Delete remote files that are missing locally (off by default — additive sync)');
+        $this->addOption('full-check', null, InputOption::VALUE_NONE, 'Bypass the local cache and verify every file against a fresh remote download');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -31,8 +33,9 @@ final class PushCommand extends AbstractBotCommand
         $client = $this->client($config);
         $bot = $this->resolveBot($config, $input);
 
-        $sync = new BotSync($client, new FileScanner(), new DiffEngine());
-        $changes = $sync->plan($bot);
+        $cache = CacheStore::forProjectRoot($config->projectRoot);
+        $sync = new BotSync($client, new FileScanner(), new DiffEngine(), $cache);
+        [$changes, $localFiles] = $sync->plan($bot, fullCheck: (bool) $input->getOption('full-check'));
 
         if ($changes->isEmpty()) {
             $io->success(sprintf('No changes for bot "%s"', $bot->name));
@@ -48,7 +51,7 @@ final class PushCommand extends AbstractBotCommand
             return Command::SUCCESS;
         }
 
-        $sync->applyPush($bot, $changes, $io, prune: (bool) $input->getOption('prune'));
+        $sync->applyPush($bot, $changes, $localFiles, $io, prune: (bool) $input->getOption('prune'));
 
         if ($input->getOption('skip-compile')) {
             $io->note('Skipped compile (--skip-compile)');

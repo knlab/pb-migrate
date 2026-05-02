@@ -2,7 +2,7 @@
 
 Command-line tool to sync local AIML projects with [Pandorabots](https://www.pandorabots.com/), built on top of [`spontena/pb-php`](https://github.com/spontena/pb-php).
 
-`pb-migrate` is a modern, OSS rewrite of an internal Spontena tool (`aimigrate`). It exposes only the publicly documented Pandorabots API surface, ships as a Symfony Console application, and includes an interactive REPL.
+`pb-migrate` is a modern OSS rewrite of an in-house CLI used at a former employer. It exposes only the publicly documented Pandorabots API surface, ships as a Symfony Console application, and includes an interactive REPL.
 
 ## Features
 
@@ -91,8 +91,9 @@ compile --bot <botname>                 Compile (verify) a bot
 push --bot <botname> [--dry-run]        Push local AIML to the bot
                      [--skip-compile]   (additive by default)
                      [--prune]          Delete remote files missing locally
+                     [--full-check]     Bypass the local cache
 pull --bot <botname>                    Pull bot files to the local directory
-diff --bot <botname>                    Unified diff between local and remote
+diff --bot <botname> [--full-check]     Unified diff between local and remote
 talk  <input> --bot <botname>           Talk to a bot
 debug <input> --bot <botname>           Talk with trace JSON
 atalk <input>                           Anonymous talk via PB_BOT_KEY
@@ -103,7 +104,19 @@ Inside the REPL, you can issue any of the same subcommands (`bot:list`, `push --
 
 ## Push / pull semantics
 
-- `push` enumerates local files (extension → `FileKind`), compares them against `getBotFiles()`, fetches conflicting remote bodies via `getBotFile()` to compare SHA-1, and uploads only what differs. By default `push` is **additive** — files that exist remotely but not locally (including the bot's default files such as `udc`) are reported but not deleted. Pass `--prune` to delete them.
+- `push` enumerates local files (extension → `FileKind`), compares them against `getBotFiles()`, and uploads only what differs (SHA-256 content hash). By default `push` is **additive** — files that exist remotely but not locally (including the bot's default files such as `udc`) are reported but not deleted. Pass `--prune` to delete them.
+
+### Local cache (`.pb-migrate-cache.json`)
+
+To avoid downloading every remote file on every `push` / `diff`, pb-migrate maintains a small JSON cache (`.pb-migrate-cache.json`, gitignored) of the SHA-256 of each file at the time of the last successful push or pull. On the next run:
+
+- if the local file hash matches the cached value, the file is treated as unchanged and **no remote body is fetched**;
+- if the local hash differs from the cached value, the file is uploaded as an UPDATE without fetching the remote body first;
+- files with no cache entry fall back to the original behavior (fetch remote body, compare hashes).
+
+This brings the API call count for an unchanged project down from O(N) to a single `getBotFiles()`, matching the experience of the legacy `aimigrate` workflow.
+
+If you suspect that someone edited the remote bot directly (e.g. via the Pandorabots dashboard) and you want pb-migrate to reconcile against the *actual* remote state, pass `--full-check`. This bypasses the cache and verifies every conflicting file against a fresh download.
 - `pull` writes every remote file into the configured directory, restoring the canonical extension (`.aiml`, `.set`, `.map`, `.substitution`, or the bare kind name for `pdefaults` / `properties`).
 - `diff` runs the same plan and prints a unified diff for each updated file.
 

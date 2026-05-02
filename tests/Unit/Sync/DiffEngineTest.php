@@ -8,6 +8,7 @@ use GuzzleHttp\Client;
 use GuzzleHttp\Handler\MockHandler;
 use GuzzleHttp\HandlerStack;
 use GuzzleHttp\Psr7\Response;
+use KnLab\PbMigrate\Sync\CacheStore;
 use KnLab\PbMigrate\Sync\DiffEngine;
 use KnLab\PbMigrate\Sync\FileChange;
 use KnLab\PbMigrate\Sync\LocalFile;
@@ -42,7 +43,7 @@ final class DiffEngineTest extends TestCase
 
     public function testAddOnlyWhenLocalHasFileMissingOnRemote(): void
     {
-        $local = [new LocalFile('/tmp/x.aiml', 'x', FileKind::File, sha1('hello'))];
+        $local = [new LocalFile('/tmp/x.aiml', 'x', FileKind::File, hash('sha256', 'hello'))];
         $remote = $this->index('{"files":[]}');
 
         $changes = (new DiffEngine())->compute($this->client, 'mybot', $local, $remote);
@@ -65,10 +66,8 @@ final class DiffEngineTest extends TestCase
 
     public function testUpdateWhenContentDiffersByHash(): void
     {
-        $local = [new LocalFile('/tmp/x.aiml', 'x', FileKind::File, sha1('local'))];
+        $local = [new LocalFile('/tmp/x.aiml', 'x', FileKind::File, hash('sha256', 'local'))];
         $remote = $this->index('{"files":[{"name":"x.aiml"}]}');
-
-        // Remote fetch returns different content → update.
         $this->mock->append(new Response(200, [], 'remote-content'));
 
         $changes = (new DiffEngine())->compute($this->client, 'mybot', $local, $remote);
@@ -79,13 +78,66 @@ final class DiffEngineTest extends TestCase
 
     public function testNoChangeWhenContentMatches(): void
     {
-        $local = [new LocalFile('/tmp/x.aiml', 'x', FileKind::File, sha1('same'))];
+        $local = [new LocalFile('/tmp/x.aiml', 'x', FileKind::File, hash('sha256', 'same'))];
         $remote = $this->index('{"files":[{"name":"x.aiml"}]}');
-
         $this->mock->append(new Response(200, [], 'same'));
 
         $changes = (new DiffEngine())->compute($this->client, 'mybot', $local, $remote);
 
         $this->assertSame([], $changes->all());
+    }
+
+    public function testCacheHitSkipsRemoteFetchWhenLocalHashMatches(): void
+    {
+        $localHash = hash('sha256', 'cached-body');
+        $local = [new LocalFile('/tmp/x.aiml', 'x', FileKind::File, $localHash)];
+        $remote = $this->index('{"files":[{"name":"x.aiml"}]}');
+
+        $cache = new CacheStore(sys_get_temp_dir() . '/non-existent-cache.json');
+        $cache->set('mybot', FileKind::File, 'x', $localHash);
+
+        // Don't append a Response — if DiffEngine calls getBotFile, MockHandler
+        // would throw an OutOfBoundsException. So this test verifies *no*
+        // network call is made.
+        $changes = (new DiffEngine())->compute($this->client, 'mybot', $local, $remote, $cache);
+
+        $this->assertSame([], $changes->all());
+    }
+
+    public function testCacheMissingForcesUpdateWithoutFetch(): void
+    {
+        $local = [new LocalFile('/tmp/x.aiml', 'x', FileKind::File, hash('sha256', 'changed'))];
+        $remote = $this->index('{"files":[{"name":"x.aiml"}]}');
+
+        $cache = new CacheStore(sys_get_temp_dir() . '/non-existent-cache.json');
+        $cache->set('mybot', FileKind::File, 'x', hash('sha256', 'old-version'));
+
+        $changes = (new DiffEngine())->compute($this->client, 'mybot', $local, $remote, $cache);
+
+        $this->assertCount(1, $changes->all());
+        $this->assertSame(FileChange::UPDATE, $changes->all()[0]->action);
+    }
+
+    public function testFullCheckBypassesCache(): void
+    {
+        $local = [new LocalFile('/tmp/x.aiml', 'x', FileKind::File, hash('sha256', 'same'))];
+        $remote = $this->index('{"files":[{"name":"x.aiml"}]}');
+
+        $cache = new CacheStore(sys_get_temp_dir() . '/non-existent-cache.json');
+        $cache->set('mybot', FileKind::File, 'x', hash('sha256', 'mismatched-stale-cache'));
+
+        // With fullCheck=true, the remote body should be fetched and compared.
+        $this->mock->append(new Response(200, [], 'same'));
+
+        $changes = (new DiffEngine())->compute(
+            client: $this->client,
+            botname: 'mybot',
+            localFiles: $local,
+            remote: $remote,
+            cache: $cache,
+            fullCheck: true,
+        );
+
+        $this->assertSame([], $changes->all(), 'remote actually matches; no change despite stale cache');
     }
 }

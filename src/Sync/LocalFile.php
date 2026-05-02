@@ -12,7 +12,7 @@ final class LocalFile
         public readonly string $path,
         public readonly string $name,
         public readonly FileKind $kind,
-        public readonly string $sha1,
+        public readonly string $hash,
     ) {
     }
 }

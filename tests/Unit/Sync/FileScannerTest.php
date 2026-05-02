@@ -61,14 +61,14 @@ final class FileScannerTest extends TestCase
         $this->assertContains(FileKind::Properties, $kinds);
     }
 
-    public function testScanComputesSha1(): void
+    public function testScanComputesSha256(): void
     {
         $path = $this->tmpDir . '/greet.aiml';
         file_put_contents($path, 'hello');
 
         $files = (new FileScanner())->scan(new BotConfig('mybot', $this->tmpDir));
         $this->assertCount(1, $files);
-        $this->assertSame(sha1('hello'), $files[0]->sha1);
+        $this->assertSame(hash('sha256', 'hello'), $files[0]->hash);
         $this->assertSame('greet', $files[0]->name);
     }
 

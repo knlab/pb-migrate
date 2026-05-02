@@ -5,17 +5,25 @@ declare(strict_types=1);
 namespace KnLab\PbMigrate\Command;
 
 use KnLab\PbMigrate\Sync\BotSync;
+use KnLab\PbMigrate\Sync\CacheStore;
 use KnLab\PbMigrate\Sync\DiffEngine;
 use KnLab\PbMigrate\Sync\FileChange;
 use KnLab\PbMigrate\Sync\FileScanner;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 
 #[AsCommand(name: 'diff', description: 'Show unified diff between local and remote bot files')]
 final class DiffCommand extends AbstractBotCommand
 {
+    protected function configure(): void
+    {
+        parent::configure();
+        $this->addOption('full-check', null, InputOption::VALUE_NONE, 'Bypass the local cache and verify every file against a fresh remote download');
+    }
+
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $io = $this->style($input, $output);
@@ -23,9 +31,10 @@ final class DiffCommand extends AbstractBotCommand
         $client = $this->client($config);
         $bot = $this->resolveBot($config, $input);
 
+        $cache = CacheStore::forProjectRoot($config->projectRoot);
         $diff = new DiffEngine();
-        $sync = new BotSync($client, new FileScanner(), $diff);
-        $changes = $sync->plan($bot);
+        $sync = new BotSync($client, new FileScanner(), $diff, $cache);
+        [$changes] = $sync->plan($bot, fullCheck: (bool) $input->getOption('full-check'));
 
         if ($changes->isEmpty()) {
             $io->writeln('<info>(no differences)</info>');

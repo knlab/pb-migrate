@@ -43,6 +43,7 @@ final class InitCommand extends Command
 
         $config = $root . DIRECTORY_SEPARATOR . 'pb-migrate.json';
         $envExample = $root . DIRECTORY_SEPARATOR . '.env.example';
+        $gitignore = $root . DIRECTORY_SEPARATOR . '.gitignore';
         $sampleAiml = $aimlDir . DIRECTORY_SEPARATOR . 'greetings.aiml';
 
         $skipped = [];
@@ -59,6 +60,7 @@ final class InitCommand extends Command
 
         $writeIfMissing($config, self::configTemplate($botname));
         $writeIfMissing($envExample, self::envTemplate());
+        $writeIfMissing($gitignore, self::gitignoreTemplate());
         $writeIfMissing($sampleAiml, self::aimlTemplate());
 
         foreach ($created as $path) {
@@ -107,6 +109,18 @@ final class InitCommand extends Command
         # Optional: override the default API host
         # PB_HOST=https://api.pandorabots.com
         ENV . "\n";
+    }
+
+    private static function gitignoreTemplate(): string
+    {
+        return <<<GIT
+        # Secrets — never commit
+        .env
+        .env.local
+
+        # Local push/pull cache (regenerated automatically)
+        .pb-migrate-cache.json
+        GIT . "\n";
     }
 
     private static function aimlTemplate(): string

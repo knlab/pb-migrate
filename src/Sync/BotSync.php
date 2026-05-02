@@ -17,21 +17,41 @@ final class BotSync
         private readonly PBClient $client,
         private readonly FileScanner $scanner,
         private readonly DiffEngine $diff,
+        private readonly ?CacheStore $cache = null,
     ) {
     }
 
-    public function plan(BotConfig $bot): FileChangeSet
+    /**
+     * @return array{0: FileChangeSet, 1: list<LocalFile>}
+     */
+    public function plan(BotConfig $bot, bool $fullCheck = false): array
     {
         $local = $this->scanner->scan($bot);
         $remote = RemoteIndex::fromResponse($this->client->getBotFiles($bot->name));
-        return $this->diff->compute($this->client, $bot->name, $local, $remote);
+        $changes = $this->diff->compute(
+            client: $this->client,
+            botname: $bot->name,
+            localFiles: $local,
+            remote: $remote,
+            cache: $this->cache,
+            fullCheck: $fullCheck,
+        );
+        return [$changes, $local];
     }
 
-    public function applyPush(BotConfig $bot, FileChangeSet $changes, SymfonyStyle $io, bool $prune = false): void
+    /**
+     * @param list<LocalFile> $localFiles
+     */
+    public function applyPush(BotConfig $bot, FileChangeSet $changes, array $localFiles, SymfonyStyle $io, bool $prune = false): void
     {
         if ($changes->isEmpty()) {
             $io->writeln('  <comment>nothing to push</comment>');
             return;
+        }
+
+        $localByKey = [];
+        foreach ($localFiles as $f) {
+            $localByKey[$f->kind->value . '/' . ($f->kind->hasFilenameInPath() ? $f->name : '')] = $f;
         }
 
         foreach ($changes->byAction(FileChange::DELETE) as $change) {
@@ -45,6 +65,7 @@ final class BotSync
                 fkind: $change->kind,
                 botname: $bot->name,
             );
+            $this->cache?->forget($bot->name, $change->kind, $change->name);
         }
 
         foreach ([FileChange::ADD, FileChange::UPDATE] as $action) {
@@ -56,8 +77,16 @@ final class BotSync
                     continue;
                 }
                 $this->client->upload($change->localPath, $bot->name);
+
+                $key = $change->kind->value . '/' . ($change->kind->hasFilenameInPath() ? $change->name : '');
+                $localFile = $localByKey[$key] ?? null;
+                if ($localFile !== null) {
+                    $this->cache?->set($bot->name, $change->kind, $change->name, $localFile->hash);
+                }
             }
         }
+
+        $this->cache?->save();
     }
 
     public function compile(BotConfig $bot, SymfonyStyle $io): void
@@ -83,9 +112,6 @@ final class BotSync
                     name: $remoteFile->kind->hasFilenameInPath() ? $remoteFile->name : null,
                 );
             } catch (ApiException $e) {
-                // System-managed files (e.g. the bot's default `udc`) appear in
-                // getBotFiles() but cannot be downloaded — Pandorabots returns
-                // HTTP 412 "precondition failed". Skip them with a warning.
                 $io->writeln(sprintf(
                     '  <comment>skip %s/%s — server returned HTTP %d (likely a system-managed file)</comment>',
                     $remoteFile->kind->value,
@@ -104,10 +130,13 @@ final class BotSync
             }
 
             file_put_contents($target, $body);
+            $this->cache?->set($bot->name, $remoteFile->kind, $remoteFile->name, hash('sha256', $body));
+
             $io->writeln(sprintf('  <fg=cyan>↓</> %s/%s → %s', $remoteFile->kind->value, $remoteFile->name, $relative));
             $count++;
         }
 
+        $this->cache?->save();
         return $count;
     }
 

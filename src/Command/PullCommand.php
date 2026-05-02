@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace KnLab\PbMigrate\Command;
 
 use KnLab\PbMigrate\Sync\BotSync;
+use KnLab\PbMigrate\Sync\CacheStore;
 use KnLab\PbMigrate\Sync\DiffEngine;
 use KnLab\PbMigrate\Sync\FileScanner;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -22,7 +23,8 @@ final class PullCommand extends AbstractBotCommand
         $client = $this->client($config);
         $bot = $this->resolveBot($config, $input);
 
-        $sync = new BotSync($client, new FileScanner(), new DiffEngine());
+        $cache = CacheStore::forProjectRoot($config->projectRoot);
+        $sync = new BotSync($client, new FileScanner(), new DiffEngine(), $cache);
         $count = $sync->pull($bot, $io);
 
         $io->success(sprintf('Pulled %d file(s) for bot "%s" into %s', $count, $bot->name, $bot->directory));

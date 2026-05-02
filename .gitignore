@@ -7,4 +7,5 @@
 .DS_Store
 .env
 .env.local
+.pb-migrate-cache.json
 *.swp
