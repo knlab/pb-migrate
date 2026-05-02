@@ -77,4 +77,55 @@ final class FileScannerTest extends TestCase
         $files = (new FileScanner())->scan(new BotConfig('mybot', $this->tmpDir . '/nope'));
         $this->assertSame([], $files);
     }
+
+    public function testOverrideReplacesExistingFileBody(): void
+    {
+        $orig = $this->tmpDir . '/greet.aiml';
+        file_put_contents($orig, 'production');
+
+        // Put the variant outside the bot's scan directory.
+        $variantDir = $this->tmpDir . '-variants';
+        mkdir($variantDir);
+        $variant = $variantDir . '/greet-test.aiml';
+        file_put_contents($variant, 'test-variant');
+
+        try {
+            $bot = new BotConfig('mybot', $this->tmpDir);
+            $files = (new FileScanner())->scan($bot, ['greet' => $variant]);
+
+            $this->assertCount(1, $files, 'override should replace, not duplicate');
+            $this->assertSame('greet', $files[0]->name);
+            $this->assertSame($variant, $files[0]->path, 'path should point at the substitute');
+            $this->assertSame(hash('sha256', 'test-variant'), $files[0]->hash);
+        } finally {
+            @unlink($variant);
+            @rmdir($variantDir);
+        }
+    }
+
+    public function testOverrideAddsBrandNewFileWhenNameMissing(): void
+    {
+        $variantDir = $this->tmpDir . '-variants';
+        mkdir($variantDir);
+        $variant = $variantDir . '/new.aiml';
+        file_put_contents($variant, 'fresh');
+
+        try {
+            $bot = new BotConfig('mybot', $this->tmpDir);
+            $files = (new FileScanner())->scan($bot, ['new' => $variant]);
+
+            $this->assertCount(1, $files);
+            $this->assertSame('new', $files[0]->name);
+        } finally {
+            @unlink($variant);
+            @rmdir($variantDir);
+        }
+    }
+
+    public function testOverrideTargetMissingThrows(): void
+    {
+        $bot = new BotConfig('mybot', $this->tmpDir);
+        $this->expectException(\KnLab\PbMigrate\Exception\ConfigException::class);
+        (new FileScanner())->scan($bot, ['greet' => '/no/such/file.aiml']);
+    }
 }

@@ -22,6 +22,7 @@ final class DiffCommand extends AbstractBotCommand
     {
         parent::configure();
         $this->addOption('full-check', null, InputOption::VALUE_NONE, 'Bypass the local cache and verify every file against a fresh remote download');
+        $this->addOption('only', null, InputOption::VALUE_REQUIRED, 'Comma-separated list of names (or kind/name) to diff; everything else is omitted');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -31,10 +32,16 @@ final class DiffCommand extends AbstractBotCommand
         $client = $this->client($config);
         $bot = $this->resolveBot($config, $input);
 
+        $only = $this->parseOnly((string) ($input->getOption('only') ?? ''));
+
         $cache = CacheStore::forProjectRoot($config->projectRoot);
         $diff = new DiffEngine();
         $sync = new BotSync($client, new FileScanner(), $diff, $cache);
         [$changes] = $sync->plan($bot, fullCheck: (bool) $input->getOption('full-check'));
+
+        if ($only !== []) {
+            $changes = $changes->filter($only);
+        }
 
         if ($changes->isEmpty()) {
             $io->writeln('<info>(no differences)</info>');
@@ -66,5 +73,16 @@ final class DiffCommand extends AbstractBotCommand
         }
 
         return Command::SUCCESS;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function parseOnly(string $raw): array
+    {
+        if ($raw === '') {
+            return [];
+        }
+        return array_values(array_filter(array_map('trim', explode(',', $raw)), static fn ($v) => $v !== ''));
     }
 }

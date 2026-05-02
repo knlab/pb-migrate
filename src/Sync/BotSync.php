@@ -22,11 +22,12 @@ final class BotSync
     }
 
     /**
+     * @param array<string, string> $overrides name → substitute file path
      * @return array{0: FileChangeSet, 1: list<LocalFile>}
      */
-    public function plan(BotConfig $bot, bool $fullCheck = false): array
+    public function plan(BotConfig $bot, bool $fullCheck = false, array $overrides = []): array
     {
-        $local = $this->scanner->scan($bot);
+        $local = $this->scanner->scan($bot, $overrides);
         $remote = RemoteIndex::fromResponse($this->client->getBotFiles($bot->name));
         $changes = $this->diff->compute(
             client: $this->client,
@@ -95,7 +96,10 @@ final class BotSync
         $this->client->compile($bot->name);
     }
 
-    public function pull(BotConfig $bot, SymfonyStyle $io): int
+    /**
+     * @param list<string> $only patterns ("name" or "kind/name") to restrict pull to
+     */
+    public function pull(BotConfig $bot, SymfonyStyle $io, array $only = []): int
     {
         $remote = RemoteIndex::fromResponse($this->client->getBotFiles($bot->name));
         $count = 0;
@@ -105,6 +109,10 @@ final class BotSync
         }
 
         foreach ($remote->all() as $remoteFile) {
+            if ($only !== [] && !$this->matchesAny($remoteFile, $only)) {
+                continue;
+            }
+
             try {
                 $body = $this->client->getBotFile(
                     kind: $remoteFile->kind,
@@ -138,6 +146,20 @@ final class BotSync
 
         $this->cache?->save();
         return $count;
+    }
+
+    /**
+     * @param list<string> $patterns
+     */
+    private function matchesAny(RemoteFile $remoteFile, array $patterns): bool
+    {
+        $key = $remoteFile->kind->value . '/' . $remoteFile->name;
+        foreach ($patterns as $p) {
+            if ($p === $remoteFile->name || $p === $key) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private function localFilename(FileKind $kind, string $name): string
