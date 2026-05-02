@@ -1,0 +1,13 @@
+{
+    "$schema": "https://knlab.github.io/pb-migrate/schema.json",
+    "host": "${PB_HOST:-https://api.pandorabots.com}",
+    "appId": "${PB_APP_ID}",
+    "userKey": "${PB_USER_KEY}",
+    "botKey": "${PB_BOT_KEY:-}",
+    "bots": {
+        "mybot": {
+            "directory": "./aiml/mybot",
+            "files": "*"
+        }
+    }
+}

@@ -1,0 +1,29 @@
+#!/usr/bin/env php
+<?php
+
+declare(strict_types=1);
+
+(static function (): void {
+    $autoloads = [
+        __DIR__ . '/../vendor/autoload.php',
+        __DIR__ . '/../../../autoload.php',
+    ];
+
+    foreach ($autoloads as $path) {
+        if (is_file($path)) {
+            require $path;
+            return;
+        }
+    }
+
+    fwrite(STDERR, "Could not locate Composer autoload. Run `composer install`.\n");
+    exit(1);
+})();
+
+use KnLab\PbMigrate\Application;
+use KnLab\PbMigrate\Config\EnvLoader;
+
+EnvLoader::loadFrom(getcwd() ?: __DIR__);
+
+$app = new Application('pb-migrate', '0.1.0');
+exit($app->run());
