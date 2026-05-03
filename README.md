@@ -9,9 +9,11 @@ Command-line tool to sync local AIML projects with [Pandorabots](https://www.pan
 ## Features
 
 - `init` — scaffold a new AIML project (config + `.env.example` + sample AIML)
-- `bot:list` / `bot:create` / `bot:delete` / `compile` — manage bots on Pandorabots
+- `bot:list` / `bot:create` / `bot:delete` / `bot:files` / `compile` — manage bots on Pandorabots
 - `push` — upload local AIML / set / map / substitution / pdefaults / properties to a bot, with content-hash diff detection (add / update / delete) and automatic `compile`
 - `pull` — download all bot files into the local project directory
+- `cat` — print a single remote file body to stdout (pipe / redirect friendly)
+- `file:delete` — surgical deletion of a single remote file
 - `diff` — show a unified diff between local and remote
 - `status` — show the local sync state of managed bots (no API calls)
 - `report` — generate an inspection report of pending changes for handoff documents
@@ -92,9 +94,13 @@ Secrets live in `.env` (which is gitignored by the scaffold) — never commit th
 ```
 init <directory> [<botname>]            Scaffold a project
 bot:list                                List bots on Pandorabots (account-wide)
+bot:files --bot <botname>               List files stored on a single bot
 bot:create <botname>                    Create a bot
 bot:delete <botname> [--yes]            Delete a bot (asks for confirmation)
 compile [--bot ...|--all]               Compile (verify) one or more bots
+cat [<name>] --bot --kind               Print a single remote file body to stdout
+file:delete [<name>] --bot --kind       Delete a single remote file
+            [--yes]                     (omit name for pdefaults / properties)
 push  [--bot ...|--all] [--dry-run]     Push local AIML to bot(s)
                         [--skip-compile]
                         [--prune]

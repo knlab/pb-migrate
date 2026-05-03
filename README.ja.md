@@ -9,9 +9,11 @@
 ## 機能概要
 
 - `init` — 新しい AIML プロジェクトを生成 (設定ファイル + `.env.example` + サンプル AIML)
-- `bot:list` / `bot:create` / `bot:delete` / `compile` — Pandorabots 上の bot 管理
+- `bot:list` / `bot:create` / `bot:delete` / `bot:files` / `compile` — Pandorabots 上の bot 管理
 - `push` — ローカルの AIML / set / map / substitution / pdefaults / properties を bot にアップロード。SHA-256 ハッシュベースの差分判定 (追加 / 更新 / 削除) と自動 `compile` 付き
 - `pull` — bot 上のファイルをローカルに一括ダウンロード
+- `cat` — リモートの 1 ファイルを stdout に出力 (パイプ・リダイレクト連携)
+- `file:delete` — リモートの 1 ファイルだけを外科的に削除
 - `diff` — ローカルとリモートの unified diff を表示
 - `status` — pb-migrate.json で管理する bot の同期状態を表示 (API 呼び出し無し)
 - `report` — 引き継ぎ文書向けの保留中変更レポートを生成
@@ -92,9 +94,13 @@ pb-migrate                      # REPL に入る
 ```
 init <directory> [<botname>]            プロジェクト雛型を生成
 bot:list                                Pandorabots アカウント全体の bot 一覧
+bot:files --bot <botname>               1 bot のファイル一覧
 bot:create <botname>                    bot を作成
 bot:delete <botname> [--yes]            bot を削除 (確認プロンプトあり)
 compile [--bot ...|--all]               1 つ以上の bot を compile (verify)
+cat [<name>] --bot --kind               リモートの 1 ファイルを stdout に出力
+file:delete [<name>] --bot --kind       リモートの 1 ファイルを削除
+            [--yes]                     (pdefaults / properties は name 不要)
 push  [--bot ...|--all] [--dry-run]     ローカル AIML を bot に push
                         [--skip-compile]
                         [--prune]

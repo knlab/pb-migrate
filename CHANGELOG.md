@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-05-03
+
+### Added
+- **`bot:files <--bot>` command** — list the files stored on a single bot, grouped by kind, with size and modified timestamps.
+- **`cat <name> --bot --kind` command** — print a single remote file's body to stdout. Pdefaults / properties take no name. Output is byte-faithful for safe piping and redirection.
+- **`file:delete <name> --bot --kind [--yes]` command** — surgical removal of a single remote file, distinct from `push --prune`. Works for every kind, asks for confirmation by default, keeps the local cache in sync.
+
+### Workarounds
+- `deleteBotFile` in spontena/pb-php v2.1.0 asserts a non-empty filename argument even for kinds where the URL ignores it (`pdefaults` / `properties`). pb-migrate passes a harmless placeholder so `file:delete --kind properties` and `push --prune` for properties/pdefaults work today. The proper fix is intended for pb-php v2.1.1.
+
 ## [0.3.0] — 2026-05-03
 
 ### Added

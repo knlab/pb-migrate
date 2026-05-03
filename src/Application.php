@@ -48,9 +48,12 @@ final class Application extends BaseApplication
         return [
             Command\InitCommand::class,
             Command\BotListCommand::class,
+            Command\BotFilesCommand::class,
             Command\BotCreateCommand::class,
             Command\BotDeleteCommand::class,
             Command\CompileCommand::class,
+            Command\CatCommand::class,
+            Command\FileDeleteCommand::class,
             Command\TalkCommand::class,
             Command\DebugCommand::class,
             Command\AtalkCommand::class,
