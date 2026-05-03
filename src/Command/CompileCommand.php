@@ -9,7 +9,7 @@ use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 
-#[AsCommand(name: 'compile', description: 'Compile (verify) a bot on Pandorabots')]
+#[AsCommand(name: 'compile', description: 'Compile (verify) one or more bots on Pandorabots')]
 final class CompileCommand extends AbstractBotCommand
 {
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -17,10 +17,13 @@ final class CompileCommand extends AbstractBotCommand
         $io = $this->style($input, $output);
         $config = $this->loadConfig($input);
         $client = $this->client($config);
-        $bot = $this->resolveBot($config, $input);
+        $bots = $this->resolveBots($config, $input);
 
-        $client->compile($bot->name);
-        $io->success(sprintf('Compiled bot: %s', $bot->name));
+        foreach ($bots as $bot) {
+            $client->compile($bot->name);
+            $io->writeln(sprintf('  <info>compiled</info> %s', $bot->name));
+        }
+        $io->success(sprintf('Compiled %d bot(s)', count($bots)));
         return Command::SUCCESS;
     }
 }

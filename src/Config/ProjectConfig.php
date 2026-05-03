@@ -75,7 +75,16 @@ final class ProjectConfig
 
             $files = self::expand((string) ($botRaw['files'] ?? '*'));
 
-            $bots[$name] = new BotConfig($name, $directory, $files !== '' ? $files : '*');
+            $rawPropertiesUpload = $botRaw['propertiesUpload'] ?? BotConfig::PROPERTIES_UPLOAD_ADDITIVE;
+            if (!is_string($rawPropertiesUpload) || !in_array($rawPropertiesUpload, [BotConfig::PROPERTIES_UPLOAD_ADDITIVE, BotConfig::PROPERTIES_UPLOAD_FULL], true)) {
+                throw new ConfigException(sprintf(
+                    'bot %s: propertiesUpload must be "additive" or "full", got %s',
+                    $name,
+                    is_scalar($rawPropertiesUpload) ? (string) $rawPropertiesUpload : gettype($rawPropertiesUpload),
+                ));
+            }
+
+            $bots[$name] = new BotConfig($name, $directory, $files !== '' ? $files : '*', $rawPropertiesUpload);
         }
 
         return new self($host, $appId, $userKey, $botKey, $bots, $projectRoot);

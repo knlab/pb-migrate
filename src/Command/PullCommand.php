@@ -28,15 +28,21 @@ final class PullCommand extends AbstractBotCommand
         $io = $this->style($input, $output);
         $config = $this->loadConfig($input);
         $client = $this->client($config);
-        $bot = $this->resolveBot($config, $input);
+        $bots = $this->resolveBots($config, $input);
 
         $only = $this->parseOnly((string) ($input->getOption('only') ?? ''));
 
         $cache = CacheStore::forProjectRoot($config->projectRoot);
         $sync = new BotSync($client, new FileScanner(), new DiffEngine(), $cache);
-        $count = $sync->pull($bot, $io, $only);
 
-        $io->success(sprintf('Pulled %d file(s) for bot "%s" into %s', $count, $bot->name, $bot->directory));
+        $total = 0;
+        foreach ($bots as $bot) {
+            $io->writeln(sprintf('<info>%s</info>:', $bot->name));
+            $count = $sync->pull($bot, $io, $only);
+            $total += $count;
+        }
+
+        $io->success(sprintf('Pulled %d file(s) across %d bot(s)', $total, count($bots)));
         return Command::SUCCESS;
     }
 

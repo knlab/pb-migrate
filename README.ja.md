@@ -13,7 +13,12 @@
 - `push` — ローカルの AIML / set / map / substitution / pdefaults / properties を bot にアップロード。SHA-256 ハッシュベースの差分判定 (追加 / 更新 / 削除) と自動 `compile` 付き
 - `pull` — bot 上のファイルをローカルに一括ダウンロード
 - `diff` — ローカルとリモートの unified diff を表示
+- `status` — pb-migrate.json で管理する bot の同期状態を表示 (API 呼び出し無し)
+- `report` — 引き継ぎ文書向けの保留中変更レポートを生成
+- `test` — bot の応答を期待値と照合 (CI 連携用 exit code)
+- `batch` — pb-migrate コマンドの runbook を実行
 - `talk` / `debug` / `atalk` — ターミナルから bot と会話
+- `--all` および `--bot 'pattern'` で `push` / `pull` / `diff` / `compile` / `report` / `status` / `test` をマルチ bot 一括実行
 - 引数なしで `pb-migrate` を起動すると対話 REPL に入る
 
 ## 動作要件
@@ -85,26 +90,38 @@ pb-migrate                      # REPL に入る
 ## コマンド一覧
 
 ```
-init <directory> [<botname>]            プロジェクトを生成
-bot:list                                bot 一覧
+init <directory> [<botname>]            プロジェクト雛型を生成
+bot:list                                Pandorabots アカウント全体の bot 一覧
 bot:create <botname>                    bot を作成
 bot:delete <botname> [--yes]            bot を削除 (確認プロンプトあり)
-compile --bot <botname>                 bot を compile (verify)
-push --bot <botname> [--dry-run]        ローカル AIML を bot に push
-                     [--skip-compile]   (デフォルトは追加のみ、削除しない)
-                     [--prune]          リモートにあってローカルに無いファイルを削除
-                     [--full-check]     キャッシュをバイパスして全 GET 比較
-                     [--only=...]       特定の名前だけに絞る
-                     [--override n=p]   この push 限りでファイル本文を差し替え
-                     [-i|--interactive] 各変更を個別に確認
-pull --bot <botname> [--only=...]       bot のファイルをローカルにダウンロード
-diff --bot <botname> [--full-check]     ローカルとリモートの unified diff
-                     [--only=...]
+compile [--bot ...|--all]               1 つ以上の bot を compile (verify)
+push  [--bot ...|--all] [--dry-run]     ローカル AIML を bot に push
+                        [--skip-compile]
+                        [--prune]
+                        [--full-check]
+                        [--only=...]
+                        [--override n=p]
+                        [-i|--interactive]
+                        [--properties-upload=additive|full]
+pull  [--bot ...|--all] [--only=...]    bot のファイルをローカルにダウンロード
+diff  [--bot ...|--all] [--full-check]  ローカルとリモートの unified diff
+                        [--only=...]
+status [--bot ...|--all]                管理 bot のローカル同期状態 (API 呼び出し無し)
+report [--bot ...|--all] [--full-check] 引き継ぎ文書向けの保留中変更レポート
+                        [--only=...]
+test   [--bot ...|--all]                bot の応答を期待値と照合
+       --input X --expect Y             — 1 件をインライン記述、または
+       --file tests.txt                 — <input>|<expected> を 1 行ずつ読む
+batch <runbook.txt>                     runbook ファイルからコマンドを連続実行
+       [--continue-on-error]            (空行と `# コメント` はスキップ)
+       [--echo]
 talk  <input> --bot <botname>           bot と会話
 debug <input> --bot <botname>           trace JSON 付きで会話
 atalk <input>                           PB_BOT_KEY を使った匿名会話
 repl                                    対話シェル (デフォルト)
 ```
+
+`--bot` は完全名のほかに glob (例: `prod.*`) を受け付けます。`--all` で `pb-migrate.json` の全 bot を対象にできます。
 
 REPL 内では同じサブコマンドを (`bot:list`, `push --bot foo` のように) 入力できます。`exit` / `quit` / Ctrl-D で抜けます。
 
@@ -154,6 +171,65 @@ pb-migrate push --bot mybot --interactive
 これで変更の無いプロジェクトの API 呼び出し回数が O(N) から `getBotFiles()` 1 回だけに減ります。
 
 ダッシュボード等から誰かがリモートを直接編集した可能性があり、**実際のリモート状態と突き合わせ直したい**場合は `--full-check` を付けてください。キャッシュをバイパスし、衝突する全ファイルについて改めてダウンロードして比較します。
+
+### `propertiesUpload`: 追記 (additive) と全置換 (full)
+
+`.properties` ファイルのアップロード戦略を bot 単位で選べます:
+
+```json
+{
+  "bots": {
+    "prod-greeter": {
+      "directory": "./aiml/greeter",
+      "propertiesUpload": "full"
+    }
+  }
+}
+```
+
+| モード | 挙動 | 想定用途 |
+|---|---|---|
+| `additive` (デフォルト) | ローカルの内容を `PUT` するだけ。Pandorabots API はリクエストに無いキーをサーバ上に残す (= upsert)。ダッシュボードや他経路で追加されたキーは保たれる | ops チームのダッシュボード編集と pb-migrate を共存させる運用 |
+| `full` | `DELETE` でリモート properties を一掃してから `PUT`。ローカルが authoritative になり、ローカルに無いキーはサーバから消える | ローカルファイルを真とする厳格な GitOps、過去の deploy で残った古いキーの掃除 |
+
+push 時に `--properties-upload=additive` または `--properties-upload=full` で bot 設定を上書き可能。
+
+### マルチ bot 操作
+
+`push` / `pull` / `diff` / `compile` / `status` / `report` / `test` は `--all` (`pb-migrate.json` 全 bot) または `--bot 'pattern'` (glob、例: `prod.*`) を受け付けます:
+
+```bash
+pb-migrate status                            # 管理対象の全 bot
+pb-migrate push --all --skip-compile         # 一括 push、compile はスキップ
+pb-migrate report --bot 'staging.*'          # staging 系 bot の引き継ぎレポート
+pb-migrate test --all --file regression.txt  # 回帰テストを全 bot で実行
+```
+
+### Runbook (`batch`)
+
+runbook はプレーンテキストファイルで、1 行 1 コマンド。`#` コメントと空行はスキップされます。
+
+```
+# weekly-cleanup.txt
+# 毎週月曜の standup 前に実行
+
+# 1. 状態スナップショット
+status --all
+
+# 2. staging で drift したものを取り戻す
+pull --bot 'staging.*'
+
+# 3. 未送信のローカル変更を全 bot に push
+push --all
+```
+
+実行:
+
+```bash
+pb-migrate batch weekly-cleanup.txt --echo --continue-on-error
+```
+
+`--echo` は各コマンドを実行前に表示 (CI ログ・監査向け)、`--continue-on-error` は失敗しても続行 (デフォルトは最初の失敗で停止)。
 
 ## テスト
 

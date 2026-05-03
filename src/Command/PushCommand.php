@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace KnLab\PbMigrate\Command;
 
+use KnLab\PbMigrate\Config\BotConfig;
+use KnLab\PbMigrate\Exception\ConfigException;
 use KnLab\PbMigrate\Sync\BotSync;
 use KnLab\PbMigrate\Sync\CacheStore;
 use KnLab\PbMigrate\Sync\DiffEngine;
@@ -27,6 +29,7 @@ final class PushCommand extends AbstractBotCommand
         $this->addOption('only', null, InputOption::VALUE_REQUIRED, 'Comma-separated list of names (or kind/name) to push; everything else is skipped');
         $this->addOption('override', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'Temporarily swap a file body for this push only. Form: name=path/to/replacement (repeatable)');
         $this->addOption('interactive', 'i', InputOption::VALUE_NONE, 'Confirm each change individually before applying');
+        $this->addOption('properties-upload', null, InputOption::VALUE_REQUIRED, 'Override bot.propertiesUpload for this push: "additive" (default) or "full" (delete remote properties first)');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -34,13 +37,49 @@ final class PushCommand extends AbstractBotCommand
         $io = $this->style($input, $output);
         $config = $this->loadConfig($input);
         $client = $this->client($config);
-        $bot = $this->resolveBot($config, $input);
+        $bots = $this->resolveBots($config, $input);
 
         $overrides = $this->parseOverrides((array) $input->getOption('override'));
         $only = $this->parseOnly((string) ($input->getOption('only') ?? ''));
-
         $cache = CacheStore::forProjectRoot($config->projectRoot);
         $sync = new BotSync($client, new FileScanner(), new DiffEngine(), $cache);
+
+        $propsOverride = $input->getOption('properties-upload');
+        if (is_string($propsOverride) && $propsOverride !== '') {
+            if (!in_array($propsOverride, [BotConfig::PROPERTIES_UPLOAD_ADDITIVE, BotConfig::PROPERTIES_UPLOAD_FULL], true)) {
+                throw new ConfigException(sprintf('--properties-upload must be "additive" or "full", got "%s"', $propsOverride));
+            }
+            $bots = array_map(
+                static fn (BotConfig $b) => new BotConfig($b->name, $b->directory, $b->filesPattern, $propsOverride),
+                $bots,
+            );
+        }
+
+        $totalChanges = 0;
+        foreach ($bots as $bot) {
+            $totalChanges += $this->runForBot($input, $io, $sync, $bot, $overrides, $only);
+        }
+
+        if ($totalChanges === 0) {
+            $io->success(sprintf('No changes across %d bot(s)', count($bots)));
+        } else {
+            $io->success(sprintf('Pushed %d change(s) across %d bot(s)', $totalChanges, count($bots)));
+        }
+        return Command::SUCCESS;
+    }
+
+    /**
+     * @param array<string, string> $overrides
+     * @param list<string> $only
+     */
+    private function runForBot(
+        InputInterface $input,
+        \Symfony\Component\Console\Style\SymfonyStyle $io,
+        BotSync $sync,
+        BotConfig $bot,
+        array $overrides,
+        array $only,
+    ): int {
         [$changes, $localFiles] = $sync->plan(
             bot: $bot,
             fullCheck: (bool) $input->getOption('full-check'),
@@ -52,8 +91,8 @@ final class PushCommand extends AbstractBotCommand
         }
 
         if ($changes->isEmpty()) {
-            $io->success(sprintf('No changes for bot "%s"', $bot->name));
-            return Command::SUCCESS;
+            $io->writeln(sprintf('<info>%s</info>: no changes', $bot->name));
+            return 0;
         }
 
         $io->writeln(sprintf('Push plan for bot <info>%s</info>:', $bot->name));
@@ -63,7 +102,7 @@ final class PushCommand extends AbstractBotCommand
 
         if ($input->getOption('dry-run')) {
             $io->writeln('<comment>(dry run — no API calls made)</comment>');
-            return Command::SUCCESS;
+            return $changes->count();
         }
 
         if ($input->getOption('interactive')) {
@@ -76,25 +115,24 @@ final class PushCommand extends AbstractBotCommand
             }
             $changes = $changes->withChanges($kept);
             if ($changes->isEmpty()) {
-                $io->writeln('<comment>(nothing selected)</comment>');
-                return Command::SUCCESS;
+                $io->writeln('  <comment>(nothing selected)</comment>');
+                return 0;
             }
         }
 
         $sync->applyPush($bot, $changes, $localFiles, $io, prune: (bool) $input->getOption('prune'));
 
         if ($input->getOption('skip-compile')) {
-            $io->note('Skipped compile (--skip-compile)');
+            $io->writeln(sprintf('  <comment>%s: skipped compile</comment>', $bot->name));
         } else {
             $sync->compile($bot, $io);
         }
 
-        $io->success(sprintf('Pushed %d change(s) to bot "%s"', $changes->count(), $bot->name));
-        return Command::SUCCESS;
+        return $changes->count();
     }
 
     /**
-     * @param list<string> $rawOverrides each in the form "name=path"
+     * @param list<string> $rawOverrides
      * @return array<string, string>
      */
     private function parseOverrides(array $rawOverrides): array

@@ -57,6 +57,10 @@ final class Application extends BaseApplication
             Command\PushCommand::class,
             Command\PullCommand::class,
             Command\DiffCommand::class,
+            Command\ReportCommand::class,
+            Command\StatusCommand::class,
+            Command\TestCommand::class,
+            Command\BatchCommand::class,
             Command\ReplCommand::class,
         ];
     }

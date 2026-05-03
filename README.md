@@ -13,7 +13,12 @@ Command-line tool to sync local AIML projects with [Pandorabots](https://www.pan
 - `push` — upload local AIML / set / map / substitution / pdefaults / properties to a bot, with content-hash diff detection (add / update / delete) and automatic `compile`
 - `pull` — download all bot files into the local project directory
 - `diff` — show a unified diff between local and remote
+- `status` — show the local sync state of managed bots (no API calls)
+- `report` — generate an inspection report of pending changes for handoff documents
+- `test` — assert bot replies match expected outputs (CI-friendly exit codes)
+- `batch` — run a runbook file of pb-migrate commands
 - `talk` / `debug` / `atalk` — converse with a bot from the terminal
+- `--all` and `--bot 'pattern'` work across `push` / `pull` / `diff` / `compile` / `report` / `status` / `test` for multi-bot operations
 - Run `pb-migrate` with no arguments to drop into an interactive REPL
 
 ## Requirements
@@ -86,25 +91,37 @@ Secrets live in `.env` (which is gitignored by the scaffold) — never commit th
 
 ```
 init <directory> [<botname>]            Scaffold a project
-bot:list                                List bots
+bot:list                                List bots on Pandorabots (account-wide)
 bot:create <botname>                    Create a bot
 bot:delete <botname> [--yes]            Delete a bot (asks for confirmation)
-compile --bot <botname>                 Compile (verify) a bot
-push --bot <botname> [--dry-run]        Push local AIML to the bot
-                     [--skip-compile]   (additive by default)
-                     [--prune]          Delete remote files missing locally
-                     [--full-check]     Bypass the local cache
-                     [--only=...]       Restrict to specific names
-                     [--override n=p]   Swap a file body for this push only
-                     [-i|--interactive] Confirm each change individually
-pull --bot <botname> [--only=...]       Pull bot files to the local directory
-diff --bot <botname> [--full-check]     Unified diff between local and remote
-                     [--only=...]
+compile [--bot ...|--all]               Compile (verify) one or more bots
+push  [--bot ...|--all] [--dry-run]     Push local AIML to bot(s)
+                        [--skip-compile]
+                        [--prune]
+                        [--full-check]
+                        [--only=...]
+                        [--override n=p]
+                        [-i|--interactive]
+                        [--properties-upload=additive|full]
+pull  [--bot ...|--all] [--only=...]    Pull bot files to the local directory
+diff  [--bot ...|--all] [--full-check]  Unified diff between local and remote
+                        [--only=...]
+status [--bot ...|--all]                Local sync state of managed bots (no API)
+report [--bot ...|--all] [--full-check] Inspection report of pending changes
+                        [--only=...]    (handoff document format)
+test   [--bot ...|--all]                Assert bot replies match expected
+       --input X --expect Y             — single inline test, OR
+       --file tests.txt                 — load <input>|<expected> per line
+batch <runbook.txt>                     Run a list of commands from a file
+       [--continue-on-error]            (skip blank lines and `# comments`)
+       [--echo]
 talk  <input> --bot <botname>           Talk to a bot
 debug <input> --bot <botname>           Talk with trace JSON
 atalk <input>                           Anonymous talk via PB_BOT_KEY
 repl                                    Interactive shell (default)
 ```
+
+For `--bot`, a glob pattern (`prod.*`) is accepted in addition to an exact bot name. Use `--all` to operate on every bot defined in `pb-migrate.json`.
 
 Inside the REPL, you can issue any of the same subcommands (`bot:list`, `push --bot foo`, etc). Use `exit`, `quit`, or Ctrl-D to leave.
 
@@ -154,6 +171,65 @@ To avoid downloading every remote file on every `push` / `diff`, pb-migrate main
 This brings the API call count for an unchanged project down from O(N) to a single `getBotFiles()`.
 
 If you suspect that someone edited the remote bot directly (e.g. via the Pandorabots dashboard) and you want pb-migrate to reconcile against the *actual* remote state, pass `--full-check`. This bypasses the cache and verifies every conflicting file against a fresh download.
+
+### `propertiesUpload`: additive vs full replace
+
+`.properties` files have two upload strategies, configurable per bot:
+
+```json
+{
+  "bots": {
+    "prod-greeter": {
+      "directory": "./aiml/greeter",
+      "propertiesUpload": "full"
+    }
+  }
+}
+```
+
+| Mode | Behavior | Suited for |
+|---|---|---|
+| `additive` (default) | Just `PUT` the local body. The Pandorabots API merges with existing remote keys, so any keys not in your local file remain on the server. | Coexisting with dashboard edits made by ops; environments where multiple sources update properties |
+| `full` | `DELETE` the remote properties file first, then `PUT` the local body. The local file becomes authoritative — any keys not present locally are removed from the server. | Strict GitOps workflows; eliminating stale keys from previous deployments |
+
+Override per push with `--properties-upload=additive` or `--properties-upload=full`.
+
+### Multi-bot operations
+
+`push` / `pull` / `diff` / `compile` / `status` / `report` / `test` accept either `--all` (every bot in `pb-migrate.json`) or `--bot 'pattern'` (glob, e.g. `prod.*`):
+
+```bash
+pb-migrate status                            # all managed bots
+pb-migrate push --all --skip-compile         # bulk push, no compile
+pb-migrate report --bot 'staging.*'          # handoff report for staging bots
+pb-migrate test --all --file regression.txt  # regression suite across bots
+```
+
+### Runbooks (`batch`)
+
+A runbook is a plain-text file: one pb-migrate command per line. Comments (`#`) and blank lines are skipped.
+
+```
+# weekly-cleanup.txt
+# Run every Monday before standup
+
+# 1. Snapshot of state
+status --all
+
+# 2. Pull anything that drifted on staging
+pull --bot 'staging.*'
+
+# 3. Push pending local changes everywhere
+push --all
+```
+
+Run with:
+
+```bash
+pb-migrate batch weekly-cleanup.txt --echo --continue-on-error
+```
+
+`--echo` prints each command for CI logs/audit; `--continue-on-error` keeps going past failures (default is stop-on-first-failure).
 
 ## Testing
 

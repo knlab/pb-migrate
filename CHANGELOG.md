@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-05-03
+
+### Added
+- **Multi-bot operations**. `push`, `pull`, `diff`, `compile`, `report`, `status`, and `test` accept `--all` (every bot in `pb-migrate.json`) and `--bot 'pattern'` (glob, e.g. `prod.*`). The previous single-`--bot <name>` form continues to work.
+- **`status` command** — show the local sync state (file counts, pending add/update vs the local cache) of one or more managed bots without touching the API.
+- **`report --next-push` command** — generate an inspection report of pending changes (badges + sizes), suitable for handoff documentation. Distinct from `push --dry-run`, which is action-oriented; `report` is inspection-oriented.
+- **`batch <file>` command** — execute a runbook of pb-migrate commands one per line. Supports `# comments`, blank-line skipping, `--continue-on-error`, and `--echo` for CI/audit logs.
+- **`test` command** — assert bot replies match expected outputs. Inline form (`--input X --expect Y`) or file form (`--file tests.txt`, one `<input>|<expected>` per line). Returns non-zero exit code on mismatch for CI integration.
+- **`propertiesUpload` per-bot setting** in `pb-migrate.json` controls how `.properties` files are uploaded:
+  - `additive` (default) — Pandorabots' native upsert behavior; remote keys not in local stay
+  - `full` — pb-migrate explicitly deletes the remote properties file before re-uploading, making local authoritative
+  - The flag `--properties-upload=...` overrides the per-bot setting for a single push.
+
+### Notes
+- Backwards-compatible release. Single-bot `push --bot foo` and `pull --bot foo` still work; the new flags are opt-in.
+
 ## [0.2.0] — 2026-05-03
 
 ### Added

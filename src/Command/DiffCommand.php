@@ -4,16 +4,19 @@ declare(strict_types=1);
 
 namespace KnLab\PbMigrate\Command;
 
+use KnLab\PbMigrate\Config\BotConfig;
 use KnLab\PbMigrate\Sync\BotSync;
 use KnLab\PbMigrate\Sync\CacheStore;
 use KnLab\PbMigrate\Sync\DiffEngine;
 use KnLab\PbMigrate\Sync\FileChange;
 use KnLab\PbMigrate\Sync\FileScanner;
+use Spontena\PbPhp\PBClient;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
+use Symfony\Component\Console\Style\SymfonyStyle;
 
 #[AsCommand(name: 'diff', description: 'Show unified diff between local and remote bot files')]
 final class DiffCommand extends AbstractBotCommand
@@ -30,32 +33,47 @@ final class DiffCommand extends AbstractBotCommand
         $io = $this->style($input, $output);
         $config = $this->loadConfig($input);
         $client = $this->client($config);
-        $bot = $this->resolveBot($config, $input);
+        $bots = $this->resolveBots($config, $input);
 
         $only = $this->parseOnly((string) ($input->getOption('only') ?? ''));
-
         $cache = CacheStore::forProjectRoot($config->projectRoot);
         $diff = new DiffEngine();
         $sync = new BotSync($client, new FileScanner(), $diff, $cache);
-        [$changes] = $sync->plan($bot, fullCheck: (bool) $input->getOption('full-check'));
 
-        if ($only !== []) {
-            $changes = $changes->filter($only);
+        $hasAny = false;
+        foreach ($bots as $bot) {
+            [$changes] = $sync->plan($bot, fullCheck: (bool) $input->getOption('full-check'));
+            if ($only !== []) {
+                $changes = $changes->filter($only);
+            }
+            if ($changes->isEmpty()) {
+                $io->writeln(sprintf('<info>%s</info>: no differences', $bot->name));
+                continue;
+            }
+            $hasAny = true;
+            $io->writeln(sprintf('<info>%s</info>:', $bot->name));
+            $this->renderChanges($io, $diff, $client, $bot, $changes->all());
         }
 
-        if ($changes->isEmpty()) {
+        if (!$hasAny) {
             $io->writeln('<info>(no differences)</info>');
-            return Command::SUCCESS;
         }
+        return Command::SUCCESS;
+    }
 
-        foreach ($changes->all() as $change) {
+    /**
+     * @param list<FileChange> $changes
+     */
+    private function renderChanges(SymfonyStyle $io, DiffEngine $diff, PBClient $client, BotConfig $bot, array $changes): void
+    {
+        foreach ($changes as $change) {
             $label = $change->kind->value . '/' . $change->name;
             switch ($change->action) {
                 case FileChange::ADD:
-                    $io->writeln(sprintf('<fg=green># local-only: %s</>', $label));
+                    $io->writeln(sprintf('  <fg=green># local-only: %s</>', $label));
                     break;
                 case FileChange::DELETE:
-                    $io->writeln(sprintf('<fg=red># remote-only: %s</>', $label));
+                    $io->writeln(sprintf('  <fg=red># remote-only: %s</>', $label));
                     break;
                 case FileChange::UPDATE:
                     if ($change->localPath === null) {
@@ -71,8 +89,6 @@ final class DiffCommand extends AbstractBotCommand
                     break;
             }
         }
-
-        return Command::SUCCESS;
     }
 
     /**

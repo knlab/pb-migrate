@@ -77,6 +77,23 @@ final class BotSync
                 if ($change->localPath === null) {
                     continue;
                 }
+
+                if ($change->kind === FileKind::Properties && $bot->propertiesUpload === BotConfig::PROPERTIES_UPLOAD_FULL) {
+                    $io->writeln('    <comment>(propertiesUpload=full: clearing remote properties first)</comment>');
+                    try {
+                        $this->client->deleteBotFile(
+                            fname: $change->name,
+                            fkind: FileKind::Properties,
+                            botname: $bot->name,
+                        );
+                    } catch (ApiException $e) {
+                        // The server might 404 if there are no properties yet — ignore that case.
+                        if ($e->getStatusCode() !== 404) {
+                            throw $e;
+                        }
+                    }
+                }
+
                 $this->client->upload($change->localPath, $bot->name);
 
                 $key = $change->kind->value . '/' . ($change->kind->hasFilenameInPath() ? $change->name : '');
