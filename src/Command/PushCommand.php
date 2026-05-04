@@ -55,6 +55,8 @@ final class PushCommand extends AbstractBotCommand
             );
         }
 
+        $dryRun = (bool) $input->getOption('dry-run');
+
         $totalChanges = 0;
         foreach ($bots as $bot) {
             $totalChanges += $this->runForBot($input, $io, $sync, $bot, $overrides, $only);
@@ -63,7 +65,8 @@ final class PushCommand extends AbstractBotCommand
         if ($totalChanges === 0) {
             $io->success(sprintf('No changes across %d bot(s)', count($bots)));
         } else {
-            $io->success(sprintf('Pushed %d change(s) across %d bot(s)', $totalChanges, count($bots)));
+            $verb = $dryRun ? 'Would push' : 'Pushed';
+            $io->success(sprintf('%s %d change(s) across %d bot(s)', $verb, $totalChanges, count($bots)));
         }
         return Command::SUCCESS;
     }
@@ -110,7 +113,24 @@ final class PushCommand extends AbstractBotCommand
             $changes = $changes->filter($only);
         }
 
-        if ($changes->isEmpty()) {
+        // Default behaviour is destructive: remote-only files are deleted to
+        // match local. --keep-remote-only flips it to additive (legacy "no prune").
+        $prune = !$input->getOption('keep-remote-only');
+
+        // Drop DELETEs from the plan when --keep-remote-only — they won't run,
+        // and listing them as `[delete]` in the output misleads the user.
+        $remoteOnlyKept = 0;
+        if (!$prune) {
+            $deletes = $changes->byAction(\KnLab\PbMigrate\Sync\FileChange::DELETE);
+            $remoteOnlyKept = count($deletes);
+            $nonDeletes = array_filter(
+                $changes->all(),
+                static fn ($c) => $c->action !== \KnLab\PbMigrate\Sync\FileChange::DELETE,
+            );
+            $changes = $changes->withChanges(array_values($nonDeletes));
+        }
+
+        if ($changes->isEmpty() && $remoteOnlyKept === 0) {
             $io->writeln(sprintf('<info>%s</info>: no changes', $bot->name));
             return 0;
         }
@@ -119,10 +139,20 @@ final class PushCommand extends AbstractBotCommand
         foreach ($changes->all() as $change) {
             $io->writeln(sprintf('  [%s] %s/%s', $change->action, $change->kind->value, $change->name));
         }
+        if ($remoteOnlyKept > 0) {
+            $io->writeln(sprintf(
+                '  <comment>(%d remote-only file(s) preserved — --keep-remote-only mode)</comment>',
+                $remoteOnlyKept,
+            ));
+        }
 
         if ($input->getOption('dry-run')) {
             $io->writeln('<comment>(dry run — no API calls made)</comment>');
             return $changes->count();
+        }
+
+        if ($changes->isEmpty()) {
+            return 0;
         }
 
         if ($input->getOption('interactive')) {
@@ -140,10 +170,7 @@ final class PushCommand extends AbstractBotCommand
             }
         }
 
-        // Default behaviour is destructive: remote-only files are deleted to
-        // match local. --keep-remote-only flips it to additive (legacy "no prune").
-        $prune = !$input->getOption('keep-remote-only');
-        $sync->applyPush($bot, $changes, $localFiles, $io, prune: $prune);
+        $applied = $sync->applyPush($bot, $changes, $localFiles, $io, prune: $prune);
 
         if ($input->getOption('skip-compile')) {
             $io->writeln(sprintf('  <comment>%s: skipped compile</comment>', $bot->name));
@@ -151,7 +178,7 @@ final class PushCommand extends AbstractBotCommand
             $sync->compile($bot, $io);
         }
 
-        return $changes->count();
+        return $applied;
     }
 
     /**

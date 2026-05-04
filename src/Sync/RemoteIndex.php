@@ -43,10 +43,17 @@ final class RemoteIndex
                     continue;
                 }
                 $name = isset($entry->name) ? (string) $entry->name : '';
-                if ($name === '' && $kind->hasFilenameInPath()) {
+                if (!$kind->hasFilenameInPath()) {
+                    // The API listing reports these kinds with the kind name as
+                    // the row label (e.g. `name="pdefaults"`), but the canonical
+                    // local-side representation has no name component. Normalise
+                    // so diff / cache joins work against bare-name local files.
+                    $name = '';
+                } elseif ($name === '') {
                     continue;
+                } else {
+                    $name = self::stripExtension($name, $kind);
                 }
-                $name = self::stripExtension($name, $kind);
                 $list[] = new RemoteFile($kind, $name);
             }
 

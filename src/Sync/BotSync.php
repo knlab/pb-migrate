@@ -41,13 +41,17 @@ final class BotSync
     }
 
     /**
+     * Returns the number of changes actually applied (excluding 412-skipped
+     * system files and DELETEs suppressed by --keep-remote-only). Callers use
+     * this for the post-push summary so the count matches what hit the wire.
+     *
      * @param list<LocalFile> $localFiles
      */
-    public function applyPush(BotConfig $bot, FileChangeSet $changes, array $localFiles, SymfonyStyle $io, bool $prune = false): void
+    public function applyPush(BotConfig $bot, FileChangeSet $changes, array $localFiles, SymfonyStyle $io, bool $prune = false): int
     {
         if ($changes->isEmpty()) {
             $io->writeln('  <comment>nothing to push</comment>');
-            return;
+            return 0;
         }
 
         $localByKey = [];
@@ -55,9 +59,12 @@ final class BotSync
             $localByKey[$f->kind->value . '/' . ($f->kind->hasFilenameInPath() ? $f->name : '')] = $f;
         }
 
+        $applied = 0;
+
         foreach ($changes->byAction(FileChange::DELETE) as $change) {
             if (!$prune) {
-                $io->writeln(sprintf('  <fg=red>-</> %s/%s <comment>(skipped — --keep-remote-only mode)</comment>', $change->kind->value, $change->name));
+                // PushCommand already annotated this in the plan; no need to
+                // re-print at apply time.
                 continue;
             }
             $io->writeln(sprintf('  <fg=red>-</> %s/%s', $change->kind->value, $change->name));
@@ -68,10 +75,9 @@ final class BotSync
                     botname: $bot->name,
                 );
             } catch (ApiException $e) {
-                // Pandorabots-managed files (e.g. `udc`) reject DELETE with HTTP 412.
-                // Treat the same way pull treats 404 on system files: warning skip,
-                // continue. Local-as-source-of-truth doesn't extend to files the
-                // server refuses to surrender control of.
+                // Safety net for any system-managed file the diff layer didn't
+                // know to filter (DiffEngine has a hardcoded list — this is
+                // for unforeseen additions). 412 = "won't be deleted, ever".
                 if ($e->getStatusCode() === 412) {
                     $io->writeln(sprintf(
                         '  <comment>skip %s/%s — server returned HTTP 412 (system-managed file)</comment>',
@@ -83,6 +89,7 @@ final class BotSync
                 throw $e;
             }
             $this->cache?->forget($bot->name, $change->kind, $change->name);
+            $applied++;
         }
 
         foreach ([FileChange::ADD, FileChange::UPDATE] as $action) {
@@ -121,10 +128,12 @@ final class BotSync
                 if ($localFile !== null) {
                     $this->cache?->set($bot->name, $change->kind, $change->name, $localFile->hash);
                 }
+                $applied++;
             }
         }
 
         $this->cache?->save();
+        return $applied;
     }
 
     public function compile(BotConfig $bot, SymfonyStyle $io): void

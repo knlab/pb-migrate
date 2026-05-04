@@ -61,6 +61,43 @@ final class FileScannerTest extends TestCase
         $this->assertContains(FileKind::Properties, $kinds);
     }
 
+    public function testScanRecognisesBareNamePropertiesAndPdefaults(): void
+    {
+        // The API returns properties/pdefaults without a filename in their
+        // path, and `pull` writes them as bare-name files. The scanner has to
+        // recognise that shape so push picks them up symmetrically.
+        file_put_contents($this->tmpDir . '/properties', 'k=v');
+        file_put_contents($this->tmpDir . '/pdefaults', '[]');
+
+        $files = (new FileScanner())->scan(new BotConfig('mybot', $this->tmpDir));
+        $this->assertCount(2, $files);
+
+        $byKind = [];
+        foreach ($files as $f) {
+            $byKind[$f->kind->value] = $f;
+        }
+
+        $this->assertArrayHasKey('properties', $byKind);
+        $this->assertSame(FileKind::Properties, $byKind['properties']->kind);
+        $this->assertSame('', $byKind['properties']->name, 'kinds without filename in path use empty name');
+
+        $this->assertArrayHasKey('pdefaults', $byKind);
+        $this->assertSame(FileKind::Pdefaults, $byKind['pdefaults']->kind);
+        $this->assertSame('', $byKind['pdefaults']->name);
+    }
+
+    public function testScanSkipsExtensionlessFilesThatAreNotPropertiesOrPdefaults(): void
+    {
+        // A file literally named `set` (which IS a known kind, but Set requires
+        // a filename in the path) must not be silently picked up as a Set entry
+        // with empty name — it'd be invalid. Skip it.
+        file_put_contents($this->tmpDir . '/set', 'noise');
+        file_put_contents($this->tmpDir . '/random', 'noise');
+
+        $files = (new FileScanner())->scan(new BotConfig('mybot', $this->tmpDir));
+        $this->assertSame([], $files);
+    }
+
     public function testScanComputesSha256(): void
     {
         $path = $this->tmpDir . '/greet.aiml';

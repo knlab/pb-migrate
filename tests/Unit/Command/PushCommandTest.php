@@ -159,8 +159,7 @@ final class PushCommandTest extends TestCase
     {
         $tester = $this->commandTester('push', [
             $this->okGetBotFiles(['files' => [['name' => 'greet.aiml']]]),
-            // No upload / delete responses queued — must not be called.
-            $this->okStatus(),  // compile (push still runs even if nothing is sent because there's a delete entry that's reported as skipped)
+            // No upload / delete / compile responses queued — none should run.
         ]);
         $tester->execute([
             '--config' => $this->configPath,
@@ -170,7 +169,8 @@ final class PushCommandTest extends TestCase
         $tester->assertCommandIsSuccessful();
 
         $display = $tester->getDisplay();
-        $this->assertStringContainsString('skipped', $display, 'should mention skip when --keep-remote-only');
+        $this->assertStringContainsString('remote-only', $display, 'should mention remote-only preservation');
+        $this->assertStringNotContainsString('[delete]', $display, 'plan must not list DEL entries that will not run');
         $methods = array_map(static fn ($t) => $t['request']->getMethod(), $this->requestHistory);
         $this->assertNotContains('DELETE', $methods, 'no DELETE with --keep-remote-only');
     }

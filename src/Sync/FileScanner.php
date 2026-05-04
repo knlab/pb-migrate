@@ -42,12 +42,26 @@ final class FileScanner
                 }
 
                 $extension = strtolower($entry->getExtension());
-                $kind = FileKind::fromExtension($extension);
-                if ($kind === null) {
-                    continue;
+                $basename = $entry->getBasename();
+
+                if ($extension !== '') {
+                    $kind = FileKind::fromExtension($extension);
+                    if ($kind === null) {
+                        continue;
+                    }
+                    $name = $entry->getBasename('.' . $entry->getExtension());
+                } else {
+                    // Bare-name files (e.g. `properties`, `pdefaults`) are how
+                    // the API returns kinds without a filename in their path,
+                    // and `pull` writes them to disk that way. Recognise them
+                    // so a pull → push roundtrip is symmetric.
+                    $kind = FileKind::fromExtension(strtolower($basename));
+                    if ($kind === null || $kind->hasFilenameInPath()) {
+                        continue;
+                    }
+                    $name = '';
                 }
 
-                $name = $entry->getBasename('.' . $entry->getExtension());
                 $path = $entry->getPathname();
                 $files[] = new LocalFile(
                     path: $path,

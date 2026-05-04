@@ -32,13 +32,15 @@ final class AddCommand extends Command
             throw new ConfigException('directory is required');
         }
 
-        $absoluteDir = $this->resolveDirectory($directory);
+        $absoluteDirs = $this->resolveDirectories($directory);
 
-        $botname = (string) ($input->getOption('bot') ?? '');
-        if ($botname === '') {
-            $botname = basename($absoluteDir);
+        $explicitBotname = (string) ($input->getOption('bot') ?? '');
+        if ($explicitBotname !== '' && count($absoluteDirs) > 1) {
+            throw new ConfigException(sprintf(
+                '--bot cannot be used with a pattern that matches multiple directories (matched %d).',
+                count($absoluteDirs),
+            ));
         }
-        $this->assertBotnameValid($botname);
 
         $absoluteConfig = $configPath;
         if (!str_starts_with($absoluteConfig, '/')) {
@@ -46,33 +48,47 @@ final class AddCommand extends Command
             $absoluteConfig = $cwd . DIRECTORY_SEPARATOR . $absoluteConfig;
         }
 
-        // Check for existing registration
-        if (is_file($absoluteConfig)) {
-            $existing = ProjectConfig::load($absoluteConfig);
-            if ($existing->hasBot($botname) && !$input->getOption('force')) {
-                $output->writeln(sprintf(
-                    '<error>bot "%s" is already registered. Use --force to overwrite.</error>',
-                    $botname,
-                ));
-                return Command::FAILURE;
+        $force = (bool) $input->getOption('force');
+        $projectRoot = dirname(realpath($absoluteConfig) ?: $absoluteConfig);
+        $registered = 0;
+
+        foreach ($absoluteDirs as $absoluteDir) {
+            $botname = $explicitBotname !== '' ? $explicitBotname : basename($absoluteDir);
+            $this->assertBotnameValid($botname);
+
+            if (is_file($absoluteConfig)) {
+                $existing = ProjectConfig::load($absoluteConfig);
+                if ($existing->hasBot($botname) && !$force) {
+                    $output->writeln(sprintf(
+                        '<error>bot "%s" is already registered. Use --force to overwrite.</error>',
+                        $botname,
+                    ));
+                    if (count($absoluteDirs) === 1) {
+                        return Command::FAILURE;
+                    }
+                    // For multi-match: skip and continue with the rest.
+                    continue;
+                }
             }
+
+            $storedDirectory = $this->relativeIfInside($absoluteDir, $projectRoot);
+            ProjectConfig::saveBot($absoluteConfig, $botname, [
+                'directory' => $storedDirectory,
+            ]);
+
+            $output->writeln(sprintf(
+                '<info>Registered bot "%s"</info> → %s',
+                $botname,
+                $storedDirectory,
+            ));
+            $registered++;
         }
 
-        // Store directory portably (relative to project root if inside it).
-        $projectRoot = dirname(realpath($absoluteConfig) ?: $absoluteConfig);
-        $storedDirectory = $this->relativeIfInside($absoluteDir, $projectRoot);
+        if ($registered === 0) {
+            return Command::FAILURE;
+        }
 
-        ProjectConfig::saveBot($absoluteConfig, $botname, [
-            'directory' => $storedDirectory,
-        ]);
-
-        $output->writeln(sprintf(
-            '<info>Registered bot "%s"</info> → %s',
-            $botname,
-            $storedDirectory,
-        ));
-
-        // Helpful next-step hints.
+        // Helpful next-step hint shown only once even if multiple bots were registered.
         $tmpConfig = ProjectConfig::load($absoluteConfig);
         if (!$tmpConfig->hasCredentials()) {
             $output->writeln('');
@@ -82,8 +98,34 @@ final class AddCommand extends Command
         return Command::SUCCESS;
     }
 
-    private function resolveDirectory(string $userInput): string
+    /**
+     * @return list<string> absolute directory paths
+     */
+    private function resolveDirectories(string $userInput): array
     {
+        // Glob expansion: if the input contains a wildcard, expand it. Otherwise
+        // treat it as a literal path. A wildcard with zero matches is an error.
+        if (preg_match('/[*?\[]/', $userInput) === 1) {
+            $pattern = $userInput;
+            if (!str_starts_with($pattern, '/')) {
+                $cwd = getcwd() ?: '.';
+                $pattern = $cwd . DIRECTORY_SEPARATOR . $pattern;
+            }
+            $matches = glob($pattern, GLOB_ONLYDIR) ?: [];
+            if ($matches === []) {
+                throw new ConfigException(sprintf('No directories match: %s', $userInput));
+            }
+            $resolved = [];
+            foreach ($matches as $match) {
+                $real = realpath($match);
+                if ($real !== false && is_dir($real)) {
+                    $resolved[] = $real;
+                }
+            }
+            sort($resolved);
+            return $resolved;
+        }
+
         $absolute = $userInput;
         if (!str_starts_with($absolute, '/')) {
             $cwd = getcwd() ?: '.';
@@ -96,7 +138,7 @@ final class AddCommand extends Command
         if (!is_dir($real)) {
             throw new ConfigException(sprintf('Not a directory: %s', $userInput));
         }
-        return $real;
+        return [$real];
     }
 
     private function assertBotnameValid(string $name): void

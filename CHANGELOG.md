@@ -6,6 +6,60 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.7.1] — 2026-05-04
+
+Bare-name plumbing was incomplete in v0.7.0 — kinds whose URL has no filename
+component (`properties`, `pdefaults`) were stored on disk under the bare kind
+name by `pull`, but `push` could not read them back, the diff layer reported
+them as ADD even when they were already remote, the `.env` file was loaded
+into `$_ENV` but not into `getenv()`, and a few output rough edges hid behind
+those bugs. This release closes the loop.
+
+### Fixed
+- `FileScanner` now recognises bare-name files (`properties`, `pdefaults`)
+  for kinds without a filename in their URL — push picks up the same files
+  that pull writes. Files whose name happens to match a kind requiring a
+  filename (e.g. a literal `set` with no extension) are still rejected.
+- `RemoteIndex` normalises the API listing for those kinds: the server echoes
+  `name="pdefaults"` / `name="properties"` as the row label, but local-side
+  representation has no name. Mismatch caused diff to report bare-name files
+  as ADD on every push after they were already uploaded.
+- `EnvLoader` now uses `Symfony\Component\Dotenv\Dotenv::usePutenv()`. Without
+  it, the rest of the tool reads credentials via `getenv()` but Symfony Dotenv
+  defaults to populating only `$_ENV`, so a fresh install (`config` writes the
+  `.env`, a new shell runs `push`) reported `PB_APP_ID is not set` even when
+  the file was correct.
+- `DiffEngine` filters Pandorabots system-managed files (currently `udc`)
+  from the DELETE plan. They returned HTTP 412 on every push; the resulting
+  warning had become noise rather than signal.
+- `DiffEngine` compares `properties` / `pdefaults` semantically (canonicalised
+  JSON) instead of by raw byte hash. Pandorabots reformats those kinds on the
+  server, so a single-line upload always disagreed with the pretty-printed
+  remote when run with `--verify-remote`.
+- `push --dry-run` summary now says "Would push" instead of "Pushed".
+- `push --keep-remote-only` no longer prints `[delete]` lines in the plan;
+  remote-only files that won't be touched are summarised once instead.
+- `push` summary count now reflects what actually hit the wire (excluding
+  412-skipped system files and DELETEs suppressed by `--keep-remote-only`).
+- `bot:files` listing drops the `size` column (the API consistently reports
+  0) and shows `—` for the redundant name in the `Pdefaults` / `Properties`
+  sections.
+- `bin/pb-migrate --version` now reports the actual release version
+  (previously stuck at `0.1.0`).
+- pb-php constraint bumped to `^2.1.3`; v2.1.3 fixes the symmetric upload-
+  path bug where `PBClient::upload()` rejected bare-name files for kinds
+  without a filename component.
+
+### Added
+- `add <pattern>` accepts a glob pattern (e.g. `./aiml/dogfood*`) and
+  registers every matching directory as a bot. Combining `--bot` with a
+  multi-match pattern is rejected; a glob with zero matches is an error.
+- REPL: tab completion for command names (when the cursor is on the first
+  word) and filesystem paths (everything after).
+- REPL: multi-word positional input for `talk` / `debug` / `atalk` is
+  auto-quoted, so `talk what is your name --bot foo` works without manual
+  quoting. Already-quoted input is left untouched.
+
 ## [0.7.0] — 2026-05-04
 
 **Major redesign release. Breaking changes throughout.** A spec review revealed

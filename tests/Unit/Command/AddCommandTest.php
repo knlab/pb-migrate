@@ -107,6 +107,50 @@ final class AddCommandTest extends TestCase
         $this->assertStringContainsString('already registered', $tester2->getDisplay());
     }
 
+    public function testAddExpandsGlobAndRegistersEachMatch(): void
+    {
+        mkdir($this->tmpDir . '/aiml/persona', 0o755, true);
+        mkdir($this->tmpDir . '/aiml/support', 0o755, true);
+        mkdir($this->tmpDir . '/aiml/unrelated', 0o755, true);
+
+        $tester = new CommandTester((new Application())->find('add'));
+        $tester->execute([
+            '--config' => $this->configPath,
+            'directory' => $this->tmpDir . '/aiml/p*',
+        ]);
+        $tester->assertCommandIsSuccessful();
+
+        $decoded = json_decode((string) file_get_contents($this->configPath), true, flags: JSON_THROW_ON_ERROR);
+        $this->assertArrayHasKey('persona', $decoded['bots']);
+        $this->assertArrayNotHasKey('greeter', $decoded['bots'], 'greeter does not match p*');
+        $this->assertArrayNotHasKey('support', $decoded['bots'], 'support does not match p*');
+        $this->assertArrayNotHasKey('unrelated', $decoded['bots']);
+    }
+
+    public function testAddRejectsBotFlagWithMultiMatchGlob(): void
+    {
+        mkdir($this->tmpDir . '/aiml/persona', 0o755, true);
+        mkdir($this->tmpDir . '/aiml/support', 0o755, true);
+
+        $tester = new CommandTester((new Application())->find('add'));
+        $this->expectException(ConfigException::class);
+        $tester->execute([
+            '--config' => $this->configPath,
+            'directory' => $this->tmpDir . '/aiml/*',
+            '--bot' => 'collapse',
+        ]);
+    }
+
+    public function testAddGlobWithNoMatchesIsAnError(): void
+    {
+        $tester = new CommandTester((new Application())->find('add'));
+        $this->expectException(ConfigException::class);
+        $tester->execute([
+            '--config' => $this->configPath,
+            'directory' => $this->tmpDir . '/aiml/nope-*',
+        ]);
+    }
+
     public function testAddWithForceOverwritesDuplicate(): void
     {
         mkdir($this->tmpDir . '/aiml/greeter2', 0o755, true);
