@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.6.1] — 2026-05-04
+
+Quality / tooling release — "test reinforcement". No user-facing functionality changes; bundles a published JSON Schema for the config plus comprehensive Command-level unit test coverage. **Total unit test count grows from 72 to 127 (+55 tests)**, leaving every CLI command with at least direct unit coverage.
+
+### Added
+- **`docs/schema.json`** — published JSON Schema (Draft 7) for `pb-migrate.json`. Served via GitHub Pages at `https://knlab.github.io/pb-migrate/schema.json` (the URL the README example and `init` template have been pointing at since v0.1.0). VS Code, JetBrains IDEs, and most JSON-aware editors pick it up automatically and provide autocomplete, hovers explaining each field, and typo warnings while editing the config.
+- **`tests/Unit/SchemaValidationTest`** (9 tests) — guards against drift between the schema and the project. Validates that the example config and the `init` command's generated template both pass the schema, and that representative bad inputs (missing required fields, typoed property names, invalid enum values) are rejected.
+- **`tests/Unit/Command/StatusCommandTest`** (6 tests) — local-vs-cache add / update display, clean-state branch, default-to-all-bots when neither `--bot` nor `--all` is given.
+- **`tests/Unit/Command/TestCommandTest`** (5 tests) — inline `--input/--expect`, `--file`, CI exit-code contract on mismatch.
+- **`tests/Unit/Command/BatchCommandTest`** (6 tests) — missing file, comment-only file, all-success run, stop-on-first-failure default, `--continue-on-error`, `--echo` prefixing.
+- **`tests/Unit/Command/PushCommandTest`** (8 tests) — add / no-changes / dry-run / skip-compile / prune (DELETE issued) / no-prune (DELETE skipped) / `--override` uploading under the canonical name (regression guard for the v0.5.0 fix) / `--only`. Uses Guzzle's history middleware to assert the exact URLs and methods called.
+- **`tests/Unit/Command/PullCommandTest`** (5 tests) — AIML-extension restoration, properties written as bare `properties`, on-demand local directory creation, `--only` filtering, graceful skipping of files that return 404 (Pandorabots-managed `udc`).
+- **`tests/Unit/Command/DiffCommandTest`** (4 tests) — no-differences, local-only marker, remote-only marker, unified diff for an updated file.
+- **`tests/Unit/Command/ConversationCommandsTest`** (6 tests) — `talk` (response printing, `client_name`/`session` propagation), `debug` (pretty trace JSON, `--reset`/`--extra` flag propagation), `atalk` (uses /talk?botkey= endpoint, refuses to run when `botKey` is absent).
+- **`tests/Unit/Command/BotLifecycleCommandsTest`** (3 tests) — `bot:create` PUTs to /bot/{appId}/{botname}; `bot:delete --yes` issues DELETE; `bot:delete` cancellation on prompt issues no API call.
+- **`tests/Unit/Command/CompileCommandTest`** (2 tests) — single-bot `--bot` path hits /verify once; `--all` invokes /verify for every bot in the config.
+
+### Internal
+- Added `justinrainbow/json-schema` to `require-dev` for the schema validation tests. No runtime dependency change.
+
 ## [0.6.0] — 2026-05-04
 
 ### Added

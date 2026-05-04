@@ -81,6 +81,8 @@ pb-migrate                      # drop into REPL
 }
 ```
 
+The `$schema` URL points at the published JSON Schema (in `docs/schema.json` and served via GitHub Pages). VS Code, JetBrains IDEs, and most JSON-aware editors pick it up automatically — you get autocomplete on field names, hovers on what each field does, and instant warnings on typos like `directry` or invalid `propertiesUpload` values. Schema drift is guarded against by a unit test (`tests/Unit/SchemaValidationTest`).
+
 Secrets live in `.env` (which is gitignored by the scaffold) — never commit them. Supported variables:
 
 | Variable | Purpose |

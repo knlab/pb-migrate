@@ -81,6 +81,8 @@ pb-migrate                      # REPL に入る
 }
 ```
 
+`$schema` の URL はリポジトリ内 `docs/schema.json` を GitHub Pages で配信したものを指しています。VS Code・JetBrains 系 IDE などほとんどの JSON 対応エディタが自動的に schema を読み込み、フィールド名の補完、各項目の説明ホバー、`directry` のような typo や `propertiesUpload` の不正値を即座に警告します。スキーマと実装のドリフトは Unit テスト (`tests/Unit/SchemaValidationTest`) で守られています。
+
 シークレットは `.env` (init で生成される `.gitignore` に追加済) に置き、絶対にコミットしないでください。利用できる環境変数:
 
 | 環境変数 | 用途 |
