@@ -19,6 +19,7 @@
 - `report` — 引き継ぎ文書向けの保留中変更レポートを生成
 - `test` — bot の応答を期待値と照合 (CI 連携用 exit code)
 - `batch` — pb-migrate コマンドの runbook を実行
+- `alter:list` / `alter:set` / `alter:unset` / `alter:reset` — ファイル差し替え (debug セッション用の探針) を `pb-migrate.json` に永続保存。`push` 時に自動適用
 - `talk` / `debug` / `atalk` — ターミナルから bot と会話
 - `--all` および `--bot 'pattern'` で `push` / `pull` / `diff` / `compile` / `report` / `status` / `test` をマルチ bot 一括実行
 - 引数なしで `pb-migrate` を起動すると対話 REPL に入る
@@ -121,6 +122,10 @@ test   [--bot ...|--all]                bot の応答を期待値と照合
 batch <runbook.txt>                     runbook ファイルからコマンドを連続実行
        [--continue-on-error]            (空行と `# コメント` はスキップ)
        [--echo]
+alter:list  [--bot ...|--all]           bot に紐づく永続 alter 一覧
+alter:set   <name> <path> --bot <bot>   alter を pb-migrate.json に追加・更新
+alter:unset <name> --bot <bot>          alter を 1 件削除
+alter:reset --bot <bot> [--yes]         alter を全削除 (debug セッション終了時)
 talk  <input> --bot <botname>           bot と会話
 debug <input> --bot <botname>           trace JSON 付きで会話
 atalk <input>                           PB_BOT_KEY を使った匿名会話
@@ -165,6 +170,54 @@ pb-migrate push --bot mybot --interactive
 ```
 
 `--override` は複数指定可能。差し替えはこのコマンド実行中だけで、ディスク上のファイルは変更されません。
+
+### 永続的な alter (debug セッション用の探針)
+
+`--override` は単発差し替えには便利ですが、bot と話しながら数時間にわたって 3〜4 個の探針を効かせ続けたい・その間 push を何度も繰り返したい、という調査セッションだと毎回引数を渡すのは煩雑です。`pb-migrate.json` に alter を保存しておけば、`push` のたびに自動で適用されます。
+
+代表的なユースケース:
+- bot に話しかけたとき内部 Predicate を `dump` するカテゴリを差し込む
+- 「あたかも X が書き込まれた状態」を装うカテゴリを差し込んで分岐パスを検証する
+- セッションが終わったら本番 push 前に全 alter を抜き取る
+
+4 つのコマンドで管理:
+
+```bash
+# 追加・更新
+pb-migrate alter:set _dump_predicates variants/dump-predicates.aiml --bot mybot
+pb-migrate alter:set greet variants/greet-debug.aiml --bot mybot
+
+# 現在の設定を表示
+pb-migrate alter:list --bot mybot
+
+# 1 件削除
+pb-migrate alter:unset greet --bot mybot
+
+# 全削除 (debug セッション終了時のクリーンアップ)
+pb-migrate alter:reset --bot mybot
+```
+
+`pb-migrate.json` の各 bot 配下に保存されます:
+
+```json
+{
+  "bots": {
+    "mybot": {
+      "directory": "./aiml/mybot",
+      "alters": {
+        "_dump_predicates": "variants/dump-predicates.aiml",
+        "greet": "variants/greet-debug.aiml"
+      }
+    }
+  }
+}
+```
+
+`push` 実行時に alter は自動で override 集合に合流します。CLI の `--override` は competing 時に勝つので、永続 alter の上に一度だけのテストを重ね掛けできます。
+
+各 alter の kind は override path の拡張子から推論されます (`--override` と同じ規則)。alter の `name` は canonical なローカルファイルとして存在しなくても OK — `_dump_predicates` のような新規名で指定すれば、bot のアップロード集合に新しいファイルとして追加されます。`alter:unset` した後に `push --prune` すれば、リモートからも削除されます。
+
+> ⚠️  alter は `pb-migrate.json` に保存されるため、git に commit すると共有ブランチに混入します。debug セッションが終わったら `alter:reset` で必ず一掃してください — alter の本来の目的は「セッション後に痕跡を残さないこと」です。
 
 ### ローカルキャッシュ (`.pb-migrate-cache.json`)
 

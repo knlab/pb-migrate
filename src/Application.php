@@ -64,6 +64,10 @@ final class Application extends BaseApplication
             Command\StatusCommand::class,
             Command\TestCommand::class,
             Command\BatchCommand::class,
+            Command\AlterListCommand::class,
+            Command\AlterSetCommand::class,
+            Command\AlterUnsetCommand::class,
+            Command\AlterResetCommand::class,
             Command\ReplCommand::class,
         ];
     }

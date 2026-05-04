@@ -19,6 +19,7 @@ Command-line tool to sync local AIML projects with [Pandorabots](https://www.pan
 - `report` — generate an inspection report of pending changes for handoff documents
 - `test` — assert bot replies match expected outputs (CI-friendly exit codes)
 - `batch` — run a runbook file of pb-migrate commands
+- `alter:list` / `alter:set` / `alter:unset` / `alter:reset` — manage persistent file-body overrides for debug-session probes (auto-applied on every `push`)
 - `talk` / `debug` / `atalk` — converse with a bot from the terminal
 - `--all` and `--bot 'pattern'` work across `push` / `pull` / `diff` / `compile` / `report` / `status` / `test` for multi-bot operations
 - Run `pb-migrate` with no arguments to drop into an interactive REPL
@@ -121,6 +122,10 @@ test   [--bot ...|--all]                Assert bot replies match expected
 batch <runbook.txt>                     Run a list of commands from a file
        [--continue-on-error]            (skip blank lines and `# comments`)
        [--echo]
+alter:list  [--bot ...|--all]           List persistent alters configured per bot
+alter:set   <name> <path> --bot <bot>   Add/update a persistent alter (saved to config)
+alter:unset <name> --bot <bot>          Remove a single persistent alter
+alter:reset --bot <bot> [--yes]         Wipe every alter on a bot (debug cleanup)
 talk  <input> --bot <botname>           Talk to a bot
 debug <input> --bot <botname>           Talk with trace JSON
 atalk <input>                           Anonymous talk via PB_BOT_KEY
@@ -165,6 +170,54 @@ pb-migrate push --bot mybot --interactive
 ```
 
 `--override` accepts multiple times. The substitution lasts only for this command — your project files on disk are not modified.
+
+### Persistent alters (debug-session probes)
+
+`--override` is great for one-shot tweaks but inconvenient when you are running an investigative session: you might keep three or four debug probes active for an hour while talking to the bot, pushing repeatedly between iterations. `pb-migrate.json` can store these as **persistent alters** so they re-apply automatically on every `push`.
+
+Typical use cases:
+- inject a category that dumps internal predicates when you talk to the bot
+- inject a category that simulates "as if" some state has been written, to exercise a branching path
+- once the session is over, strip all alters before the next production push
+
+Manage the set with four commands:
+
+```bash
+# add or update an entry
+pb-migrate alter:set _dump_predicates variants/dump-predicates.aiml --bot mybot
+pb-migrate alter:set greet variants/greet-debug.aiml --bot mybot
+
+# show what's currently configured
+pb-migrate alter:list --bot mybot
+
+# remove a single entry
+pb-migrate alter:unset greet --bot mybot
+
+# wipe every alter for this bot (debug-session cleanup)
+pb-migrate alter:reset --bot mybot
+```
+
+This persists the entries under each bot in `pb-migrate.json`:
+
+```json
+{
+  "bots": {
+    "mybot": {
+      "directory": "./aiml/mybot",
+      "alters": {
+        "_dump_predicates": "variants/dump-predicates.aiml",
+        "greet": "variants/greet-debug.aiml"
+      }
+    }
+  }
+}
+```
+
+When `push` runs, the alters are merged into the override set automatically. CLI `--override` still wins on conflict, letting you layer a one-shot test on top of a persistent debug-session alter.
+
+The kind of each alter is inferred from the override file's extension (same rule as `--override`). The alter `name` need not exist as a canonical local file — using a fresh name like `_dump_predicates` adds a brand-new file to the bot's upload set, and `alter:unset` followed by another `push --prune` removes it from the remote.
+
+> ⚠️  Persistent alters live in `pb-migrate.json`, which is typically committed to git. Run `alter:reset` (or remove the entries manually) before merging your config back into a shared branch — the goal of an alter is to leave no trace once the debug session is over.
 
 ### Local cache (`.pb-migrate-cache.json`)
 

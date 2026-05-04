@@ -6,6 +6,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-05-04
+
+### Added
+- **Persistent alters**. Four new commands manage per-bot file-body overrides that live in `pb-migrate.json` and re-apply automatically on every `push`:
+  - `alter:list [--bot ...|--all]` — show configured alters
+  - `alter:set <name> <path> --bot <bot>` — add/update an alter
+  - `alter:unset <name> --bot <bot>` — remove a single alter
+  - `alter:reset --bot <bot> [--yes]` — remove every alter on a bot (debug-session cleanup)
+
+  Use case: ports the `alter` workflow from the legacy `aimigrate` tool — temporarily inject debug probes (e.g. a category that dumps internal predicates, or one that simulates "as if" some state has been written) and have them auto-apply on every push during an investigative session, then strip them before going to production. The CLI `--override` continues to work and wins on conflict so one-shot tests can layer on top of a persistent alter set.
+
+### Fixed
+- **`push --override` was uploading files under the override path's basename, not the canonical name.** For example, `push --bot mybot --override greet=variants/greet-test.aiml` would upload to `/file/greet-test` instead of `/file/greet`, so the canonical `greet` file on the bot was never updated by an override. Existed since v0.2.0; surfaced now while writing the integration test for the new alter feature, which exercised the same code path.
+
+### Changed
+- `BotConfig` gains an optional `alters` map field (defaults to empty). Existing `pb-migrate.json` files without the field continue to work unchanged.
+- Minimum required `spontena/pb-php` bumped from `^2.1.1` to `^2.1.2`. pb-php v2.1.2 adds an explicit `name` parameter to `PBClient::upload()`; pb-migrate uses it when uploading a file whose local path basename does not match the canonical name on the bot (the `--override` and persistent alter cases).
+
+### Tests
+- New `AlterCommandsTest` (8 unit tests) covering set/unset/reset/list, env-var literal preservation on write-back, and missing-path rejection.
+- New `AlterPersistenceTest` (2 integration tests) exercising the set → push → unset → push roundtrip against the real Pandorabots API. Also implicitly verifies the `--override` upload-name fix above.
+
 ## [0.4.1] — 2026-05-04
 
 ### Changed

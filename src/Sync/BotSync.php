@@ -94,7 +94,11 @@ final class BotSync
                     }
                 }
 
-                $this->client->upload($change->localPath, $bot->name);
+                $this->client->upload(
+                    fname: $change->localPath,
+                    botname: $bot->name,
+                    name: $change->kind->hasFilenameInPath() ? $change->name : null,
+                );
 
                 $key = $change->kind->value . '/' . ($change->kind->hasFilenameInPath() ? $change->name : '');
                 $localFile = $localByKey[$key] ?? null;

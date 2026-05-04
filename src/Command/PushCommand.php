@@ -80,10 +80,23 @@ final class PushCommand extends AbstractBotCommand
         array $overrides,
         array $only,
     ): int {
+        // Merge persistent alters from pb-migrate.json with the CLI --override list.
+        // CLI wins on conflict so users can layer one-shot tests on top of a
+        // persistent debug-session alter set.
+        $effectiveOverrides = array_merge($bot->alters, $overrides);
+
+        if ($bot->alters !== []) {
+            $io->writeln(sprintf(
+                '<comment>%s: applying %d persistent alter(s) from config</comment>',
+                $bot->name,
+                count($bot->alters),
+            ));
+        }
+
         [$changes, $localFiles] = $sync->plan(
             bot: $bot,
             fullCheck: (bool) $input->getOption('full-check'),
-            overrides: $overrides,
+            overrides: $effectiveOverrides,
         );
 
         if ($only !== []) {
