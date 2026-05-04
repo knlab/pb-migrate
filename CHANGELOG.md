@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-05-04
+
+### Added
+- **`report --since=cache`** — generate the same handoff-friendly inspection report as the default `report`, but with `.pb-migrate-cache.json` as the diff source instead of the live remote bot. No API calls are made. Detects:
+  - `(+)` ADD — local file with no cache entry (new since last push/pull)
+  - `(*)` UPDATE — local file whose SHA-256 differs from the cache
+  - `(-)` DELETE — cache entry with no matching local file (would be removed by `push --prune`)
+  - Useful for PR descriptions, handoff notes, and pre-merge sanity checks. Complements the existing `status` command, which shows only the totals.
+- New `Sync\CachePlanner` class encapsulates the local-vs-cache diff logic so it can be reused outside the API-bound `BotSync::plan()` path.
+
+### Changed
+- `report` default behavior is unchanged. `--since=cache` is opt-in.
+- `--since=cache` rejects combination with `--full-check` (the latter requires API access).
+
+### Tests
+- New `ReportCommandTest` (6 unit tests) covering the cache-mode add/update/delete detection, empty-cache warning, the `--full-check` conflict, unknown `--since` values, and the clean-state case.
+
 ## [0.5.0] — 2026-05-04
 
 ### Added

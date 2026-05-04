@@ -87,6 +87,18 @@ final class CacheStore
         return $this->bots[$botname][$key] ?? null;
     }
 
+    /**
+     * Return the cache entries for a single bot as a flat map of
+     * "kind/name" → sha256. Used by callers that need to enumerate
+     * everything the bot was last seen pushing or pulling.
+     *
+     * @return array<string, string>
+     */
+    public function entriesFor(string $botname): array
+    {
+        return $this->bots[$botname] ?? [];
+    }
+
     public function set(string $botname, FileKind $kind, string $name, string $sha256): void
     {
         $key = self::key($kind, $name);

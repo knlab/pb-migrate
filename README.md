@@ -116,6 +116,8 @@ diff  [--bot ...|--all] [--full-check]  Unified diff between local and remote
 status [--bot ...|--all]                Local sync state of managed bots (no API)
 report [--bot ...|--all] [--full-check] Inspection report of pending changes
                         [--only=...]    (handoff document format)
+                        [--since=cache] (no API; report local changes since
+                                         the last successful push/pull)
 test   [--bot ...|--all]                Assert bot replies match expected
        --input X --expect Y             — single inline test, OR
        --file tests.txt                 — load <input>|<expected> per line
@@ -230,6 +232,28 @@ To avoid downloading every remote file on every `push` / `diff`, pb-migrate main
 This brings the API call count for an unchanged project down from O(N) to a single `getBotFiles()`.
 
 If you suspect that someone edited the remote bot directly (e.g. via the Pandorabots dashboard) and you want pb-migrate to reconcile against the *actual* remote state, pass `--full-check`. This bypasses the cache and verifies every conflicting file against a fresh download.
+
+### `report --since=cache` (no-API local-changes report)
+
+`status` already shows a **count** of locally-changed files since the last push/pull. When you need the **list** of those changes (for a PR description, handoff doc, or pre-merge sanity check) without spending API quota, run:
+
+```bash
+# what did I touch since the last push/pull?
+pb-migrate report --bot mybot --since=cache
+
+# across every bot
+pb-migrate report --all --since=cache
+```
+
+`--since=cache` flips the diff source from "live remote bot" to ".pb-migrate-cache.json" (the SHA-256 of every file last seen on push/pull). Detected changes:
+
+- `(+)` ADD — local file with no cache entry (new since last sync)
+- `(*)` UPDATE — local file whose hash differs from the cache
+- `(-)` DELETE — cache entry with no matching local file (would be removed by `push --prune`)
+
+The output format matches the default `report` so it pastes cleanly into the same handoff documents. If a bot has no cache entries yet (first run, or after clearing the cache), every local file is reported as new with a warning to `pull` / `push` once to establish a baseline.
+
+`--since=cache` cannot be combined with `--full-check` (which requires API access).
 
 ### `propertiesUpload`: additive vs full replace
 

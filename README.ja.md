@@ -116,6 +116,7 @@ diff  [--bot ...|--all] [--full-check]  ローカルとリモートの unified d
 status [--bot ...|--all]                管理 bot のローカル同期状態 (API 呼び出し無し)
 report [--bot ...|--all] [--full-check] 引き継ぎ文書向けの保留中変更レポート
                         [--only=...]
+                        [--since=cache] (API 不要、前回 push/pull 以降のローカル変更のみ)
 test   [--bot ...|--all]                bot の応答を期待値と照合
        --input X --expect Y             — 1 件をインライン記述、または
        --file tests.txt                 — <input>|<expected> を 1 行ずつ読む
@@ -230,6 +231,28 @@ pb-migrate alter:reset --bot mybot
 これで変更の無いプロジェクトの API 呼び出し回数が O(N) から `getBotFiles()` 1 回だけに減ります。
 
 ダッシュボード等から誰かがリモートを直接編集した可能性があり、**実際のリモート状態と突き合わせ直したい**場合は `--full-check` を付けてください。キャッシュをバイパスし、衝突する全ファイルについて改めてダウンロードして比較します。
+
+### `report --since=cache` (API 不要のローカル変更レポート)
+
+`status` は前回 push/pull 以降のローカル変更の **件数** を表示しますが、PR 説明文や引き継ぎメモのために **変更ファイルの一覧** が欲しい時 (かつ API クォータを使いたくない時) は:
+
+```bash
+# 直前 push/pull 以降に何を触ったか
+pb-migrate report --bot mybot --since=cache
+
+# 全 bot 横断
+pb-migrate report --all --since=cache
+```
+
+`--since=cache` を付けると差分のソースを「ライブのリモート bot」から「`.pb-migrate-cache.json` (前回 push/pull 時点の各ファイルの SHA-256)」に切り替えます。検出される変更:
+
+- `(+)` ADD — ローカルにあるが cache に無い (前回同期以降に追加)
+- `(*)` UPDATE — ローカルと cache で hash が異なる (編集済み)
+- `(-)` DELETE — cache にあるがローカルに無い (`push --prune` で消える対象)
+
+出力フォーマットはデフォルト `report` と同じなので、同じ引き継ぎ文書テンプレートにそのまま貼り付けられます。bot の cache がまだ空 (初回実行や cache 削除直後) だと、全ローカルファイルが add 扱いで出力され「`pull` / `push` で baseline を作ってください」という警告が出ます。
+
+`--since=cache` と `--full-check` は同時指定不可 (`--full-check` は API アクセスが必須なため)。
 
 ### `propertiesUpload`: 追記 (additive) と全置換 (full)
 

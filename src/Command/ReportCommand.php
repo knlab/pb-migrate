@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace KnLab\PbMigrate\Command;
 
 use KnLab\PbMigrate\Config\BotConfig;
+use KnLab\PbMigrate\Exception\ConfigException;
 use KnLab\PbMigrate\Sync\BotSync;
+use KnLab\PbMigrate\Sync\CachePlanner;
 use KnLab\PbMigrate\Sync\CacheStore;
 use KnLab\PbMigrate\Sync\DiffEngine;
 use KnLab\PbMigrate\Sync\FileChange;
@@ -26,27 +28,51 @@ final class ReportCommand extends AbstractBotCommand
         $this->addOption('next-push', null, InputOption::VALUE_NONE, 'Report what would be sent on the next push (default if no other mode is specified)');
         $this->addOption('full-check', null, InputOption::VALUE_NONE, 'Bypass the local cache and verify every file against a fresh remote download');
         $this->addOption('only', null, InputOption::VALUE_REQUIRED, 'Comma-separated list of names (or kind/name) to include');
+        $this->addOption('since', null, InputOption::VALUE_REQUIRED, 'Diff source: "remote" (default, hits the API) or "cache" (no API; reports local changes since last successful push/pull)');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $io = $this->style($input, $output);
+
+        $since = (string) ($input->getOption('since') ?? 'remote');
+        if (!in_array($since, ['remote', 'cache'], true)) {
+            throw new ConfigException(sprintf('--since must be "remote" or "cache", got "%s"', $since));
+        }
+        if ($since === 'cache' && $input->getOption('full-check')) {
+            throw new ConfigException('--full-check cannot be combined with --since=cache (full-check requires API access)');
+        }
+
         $config = $this->loadConfig($input);
-        $client = $this->client($config);
         $bots = $this->resolveBots($config, $input);
 
         $only = $this->parseOnly((string) ($input->getOption('only') ?? ''));
         $cache = CacheStore::forProjectRoot($config->projectRoot);
-        $sync = new BotSync($client, new FileScanner(), new DiffEngine(), $cache);
+
+        $planner = $since === 'cache'
+            ? new CachePlanner(new FileScanner(), $cache)
+            : new BotSync($this->client($config), new FileScanner(), new DiffEngine(), $cache);
 
         $totalAdd = $totalUpdate = $totalDelete = 0;
         foreach ($bots as $bot) {
-            [$changes] = $sync->plan($bot, fullCheck: (bool) $input->getOption('full-check'));
+            $cacheEmpty = $since === 'cache' && $cache->entriesFor($bot->name) === [];
+            if ($cacheEmpty) {
+                $io->writeln('');
+                $io->writeln(sprintf(
+                    '<comment>%s: no cache reference yet — every local file is reported as new. Run `pull` or `push` once to establish a baseline.</comment>',
+                    $bot->name,
+                ));
+            }
+
+            $changes = $since === 'cache'
+                ? $planner->plan($bot)[0]
+                : $planner->plan($bot, fullCheck: (bool) $input->getOption('full-check'))[0];
+
             if ($only !== []) {
                 $changes = $changes->filter($only);
             }
 
-            $this->renderBotSection($io, $bot, $changes);
+            $this->renderBotSection($io, $bot, $changes, $since);
 
             $totalAdd += count($changes->byAction(FileChange::ADD));
             $totalUpdate += count($changes->byAction(FileChange::UPDATE));
@@ -64,10 +90,13 @@ final class ReportCommand extends AbstractBotCommand
         return Command::SUCCESS;
     }
 
-    private function renderBotSection(\Symfony\Component\Console\Style\SymfonyStyle $io, BotConfig $bot, FileChangeSet $changes): void
+    private function renderBotSection(\Symfony\Component\Console\Style\SymfonyStyle $io, BotConfig $bot, FileChangeSet $changes, string $since): void
     {
+        $heading = $since === 'cache'
+            ? sprintf('Local changes for bot <info>%s</info> since last push/pull', $bot->name)
+            : sprintf('Pending changes for bot <info>%s</info>', $bot->name);
         $io->writeln('');
-        $io->writeln(sprintf('Pending changes for bot <info>%s</info>', $bot->name));
+        $io->writeln($heading);
         $io->writeln('─────────────────────────────────────────────');
 
         if ($changes->isEmpty()) {
