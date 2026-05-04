@@ -129,16 +129,33 @@ pb-migrate config                                  # 対話で project credentia
 pb-migrate config --app-id X --user-key Y          # CI 用フラグ渡し
 pb-migrate config --bot mybot                      # 対話で bot_key
 pb-migrate config --bot mybot --bot-key VALUE
-pb-migrate config --show                           # 全値を mask 表示
-pb-migrate config --show --plain                   # 全値を平文表示 (注意)
+pb-migrate config --show                           # 全値を表示
 ```
+
+対話 prompt では現在値が `[default]:` 形式で表示されます。Enter で keep、新値を入れて update、`-` で clear (optional フィールドのみ)。
+
+## `atalk` と bot_key について
+
+`atalk` (匿名会話) には per-bot の **bot_key** が必要。bot_key は Pandorabots
+のダッシュボード UI (developer.pandorabots.com) で発行され、API では取得
+できません。
+
+注意: 検証した API トライアル / Developer Portal 環境では、API 経由で作成
+した bot (`pb-migrate bot:create` など `PUT /bot/...` 由来) は
+**ダッシュボードの bot 一覧に表示されません**。bot_key を返す API
+endpoint も存在しない様子です。結果として **API 経由で作った bot は atalk
+できない** という制約が発生します。`atalk` を使いたい場合は、ダッシュボード
+側で先に bot を作成 → `pb-migrate add` でローカル登録、という逆順ワーク
+フローが必要です。
+
+`talk` / `debug` は user_key 認証なのでどちらの経路でも問題なく動作します。
 
 ## コマンド一覧
 
 ```
 add <directory> [--bot <name>] [--force]    パッケージディレクトリを登録
 remove <botname> [--yes]                    bot 登録を解除 (リモートは触らない)
-config [--bot <name>] [--show] [--plain]    .env の credentials 編集
+config [--bot <name>] [--show]              .env の credentials 編集
        [--app-id X --user-key Y]
        [--bot-key Z]
 bot:list                                    登録済 bot 一覧 (ローカル、API 不要)

@@ -53,7 +53,7 @@ final class DiffCommand extends AbstractBotCommand
 
         if (!$hasAny) {
             $io->writeln('');
-            $io->writeln('<info>(no differences)</info>');
+            $io->writeln('(no differences)');
         }
         return Command::SUCCESS;
     }
@@ -61,12 +61,12 @@ final class DiffCommand extends AbstractBotCommand
     private function renderBot(SymfonyStyle $io, string $host, string $appId, BotConfig $bot, FileChangeSet $changes): void
     {
         $io->writeln('');
-        $io->writeln(sprintf('<info>%s:</info>', $bot->name));
+        $io->writeln(sprintf('%s:', $bot->name));
         $io->writeln(sprintf('URL: %s', $host));
         $io->writeln(sprintf('BOT: %s/%s', $appId, $bot->name));
 
         if ($changes->isEmpty()) {
-            $io->writeln('  <comment>(no differences)</comment>');
+            $io->writeln('  (no differences)');
             return;
         }
 

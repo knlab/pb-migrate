@@ -37,7 +37,7 @@ final class PullCommand extends AbstractBotCommand
 
         $total = 0;
         foreach ($bots as $bot) {
-            $io->writeln(sprintf('<info>%s</info>:', $bot->name));
+            $io->writeln(sprintf('%s:', $bot->name));
             $count = $sync->pull($bot, $io, $only);
             $total += $count;
         }

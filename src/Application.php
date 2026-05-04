@@ -11,7 +11,7 @@ final class Application extends BaseApplication
 {
     public function __construct(
         string $name = 'pb-migrate',
-        string $version = '0.7.1',
+        string $version = '0.7.2',
         ?PBClientFactory $factory = null,
     ) {
         parent::__construct($name, $version);
@@ -25,6 +25,16 @@ final class Application extends BaseApplication
                 $command->setFactory($factory);
             }
             $this->add($command);
+        }
+
+        // Hide Symfony Console plumbing from the user-facing command list.
+        // `list` / `help` / `completion` still work if typed (the REPL also
+        // routes `?` and bare `help` to `list`), but they're transport-layer
+        // and clutter the workflow-facing overview.
+        foreach (['list', 'help', 'completion'] as $name) {
+            if ($this->has($name)) {
+                $this->get($name)->setHidden(true);
+            }
         }
     }
 

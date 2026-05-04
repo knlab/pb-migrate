@@ -21,17 +21,17 @@ final class BotRemoteCommand extends AbstractBotCommand
         $remote = $client->getBotsList();
 
         $io->writeln('');
-        $io->writeln(sprintf('<info>Account:</info> %s', $config->appId()));
-        $io->writeln(sprintf('<info>URL:</info>     %s', $config->host()));
+        $io->writeln(sprintf('Account: %s', $config->appId()));
+        $io->writeln(sprintf('URL:     %s', $config->host()));
         $io->writeln('');
 
         $registered = array_keys($config->bots());
 
         // Render the remote-side list with annotations.
         if ($remote === []) {
-            $io->writeln('<comment>No bots on the remote account.</comment>');
+            $io->writeln('No bots on the remote account.');
         } else {
-            $io->writeln(sprintf('<info>Remote bots (%d):</info>', count($remote)));
+            $io->writeln(sprintf('Remote bots (%d):', count($remote)));
             $rows = [];
             $remoteNames = [];
             foreach ($remote as $entry) {
@@ -41,22 +41,20 @@ final class BotRemoteCommand extends AbstractBotCommand
                 }
                 $remoteNames[] = $name;
                 $compiled = !empty($entry->compiled) ? 'compiled' : 'uncompiled';
-                $tag = in_array($name, $registered, true)
-                    ? '<fg=green>registered</>'
-                    : '<fg=yellow>unmanaged</>';
+                $tag = in_array($name, $registered, true) ? 'registered' : 'unmanaged';
                 $rows[] = [$name, $compiled, $tag];
             }
-            $io->table(['name', 'state', 'tag'], $rows);
+            $this->plainTable($io, ['name', 'state', 'tag'], $rows);
         }
 
         // Show locally-registered bots that don't yet exist on the remote.
         $missing = array_values(array_diff($registered, $remoteNames ?? []));
         if ($missing !== []) {
             $io->writeln('');
-            $io->writeln(sprintf('<info>Registered but not on remote (%d):</info>', count($missing)));
+            $io->writeln(sprintf('Registered but not on remote (%d):', count($missing)));
             foreach ($missing as $name) {
                 $io->writeln(sprintf(
-                    '  <fg=magenta>%s</>  <comment>(run `pb-migrate bot:create %s` to create)</comment>',
+                    '  %s  <comment>(run `pb-migrate bot:create %s` to create)</comment>',
                     $name,
                     $name,
                 ));

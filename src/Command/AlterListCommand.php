@@ -25,7 +25,7 @@ final class AlterListCommand extends AbstractBotCommand
         $bots = $this->resolveBotsOrAll($config, $input);
 
         if ($bots === []) {
-            $io->writeln('<comment>(no bots registered)</comment>');
+            $io->writeln('(no bots registered)');
             return Command::SUCCESS;
         }
 
@@ -53,9 +53,11 @@ final class AlterListCommand extends AbstractBotCommand
 
     private function renderBot(SymfonyStyle $io, BotConfig $bot, string $projectRoot): void
     {
-        $io->section($bot->name);
+        $io->writeln('');
+        $io->writeln($bot->name);
+        $io->writeln(str_repeat('-', strlen($bot->name)));
         if ($bot->alters === []) {
-            $io->writeln('  <comment>(no alters)</comment>');
+            $io->writeln('  (no alters)');
             return;
         }
 
@@ -69,6 +71,6 @@ final class AlterListCommand extends AbstractBotCommand
             $marker = $missing ? '<fg=red>[missing!]</>' : '';
             $rows[] = [$name, $display, $marker];
         }
-        $io->table(['name', 'override path', 'status'], $rows);
+        $this->plainTable($io, ['name', 'override path', 'status'], $rows);
     }
 }

@@ -25,5 +25,5 @@ use KnLab\PbMigrate\Config\EnvLoader;
 
 EnvLoader::loadFrom(getcwd() ?: __DIR__);
 
-$app = new Application('pb-migrate', '0.7.1');
+$app = new Application('pb-migrate', '0.7.2');
 exit($app->run());

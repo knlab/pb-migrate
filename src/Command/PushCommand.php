@@ -131,11 +131,11 @@ final class PushCommand extends AbstractBotCommand
         }
 
         if ($changes->isEmpty() && $remoteOnlyKept === 0) {
-            $io->writeln(sprintf('<info>%s</info>: no changes', $bot->name));
+            $io->writeln(sprintf('%s: no changes', $bot->name));
             return 0;
         }
 
-        $io->writeln(sprintf('Push plan for bot <info>%s</info>:', $bot->name));
+        $io->writeln(sprintf('Push plan for bot %s:', $bot->name));
         foreach ($changes->all() as $change) {
             $io->writeln(sprintf('  [%s] %s/%s', $change->action, $change->kind->value, $change->name));
         }
@@ -165,7 +165,7 @@ final class PushCommand extends AbstractBotCommand
             }
             $changes = $changes->withChanges($kept);
             if ($changes->isEmpty()) {
-                $io->writeln('  <comment>(nothing selected)</comment>');
+                $io->writeln('  (nothing selected)');
                 return 0;
             }
         }
@@ -173,7 +173,7 @@ final class PushCommand extends AbstractBotCommand
         $applied = $sync->applyPush($bot, $changes, $localFiles, $io, prune: $prune);
 
         if ($input->getOption('skip-compile')) {
-            $io->writeln(sprintf('  <comment>%s: skipped compile</comment>', $bot->name));
+            $io->writeln(sprintf('  %s: skipped compile', $bot->name));
         } else {
             $sync->compile($bot, $io);
         }

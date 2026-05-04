@@ -55,10 +55,15 @@ final class RemoveCommand extends Command
 
         ProjectConfig::removeBot($config->configPath, $botname);
 
-        // Also remove the bot's bot_key block from .env, if any.
+        // Also remove the bot's bot_key block from .env, if any. Surface this
+        // explicitly: a silent .env mutation is surprising — the user would
+        // wonder later why their bot_key disappeared.
         $envPath = $config->projectRoot . DIRECTORY_SEPARATOR . '.env';
         $envFile = new EnvFile($envPath);
-        $envFile->removeBlock(EnvFile::blockIdForBot($botname));
+        $hadBotKey = $envFile->removeBlock(EnvFile::blockIdForBot($botname));
+        if ($hadBotKey) {
+            $io->writeln(sprintf('  (also removed PB_BOT_%s_KEY block from .env)', strtoupper($botname)));
+        }
 
         $io->success(sprintf('Unregistered bot "%s"', $botname));
         return Command::SUCCESS;

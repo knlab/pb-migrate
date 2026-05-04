@@ -129,16 +129,35 @@ pb-migrate config                                  # prompts for project credent
 pb-migrate config --app-id X --user-key Y          # CI / scripted form
 pb-migrate config --bot mybot                      # prompts for that bot's bot_key
 pb-migrate config --bot mybot --bot-key VALUE
-pb-migrate config --show                           # display all values, masked
-pb-migrate config --show --plain                   # display all values, plain text (use carefully)
+pb-migrate config --show                           # display all values
 ```
+
+The interactive prompts show the current value; press Enter to keep it,
+type a new value to update, or type `-` to clear an optional field.
+
+## A note on `atalk` and bot_keys
+
+`atalk` (anonymous talk) requires a per-bot **bot_key**. Pandorabots issues
+bot_keys through their dashboard UI (developer.pandorabots.com), not through
+the Developer Portal API.
+
+Heads-up: bots created via the API (`pb-migrate bot:create`, or anything
+else hitting `PUT /bot/...`) **do not appear in the dashboard's bot list**
+during the API trial / Developer Portal tier we tested against. There seems
+to be no API endpoint that returns the bot_key either. The practical
+consequence: if you want `atalk` to work, create the bot on the dashboard
+first and `pb-migrate add` it locally, rather than using `bot:create` to
+spin it up via the API.
+
+`talk` and `debug` use the regular user_key authentication and work fine
+for either path.
 
 ## Commands
 
 ```
 add <directory> [--bot <name>] [--force]    Register a package directory
 remove <botname> [--yes]                    Unregister a bot (does not touch remote)
-config [--bot <name>] [--show] [--plain]    Edit credentials in .env
+config [--bot <name>] [--show]              Edit credentials in .env
        [--app-id X --user-key Y]
        [--bot-key Z]
 bot:list                                    List registered bots (local, no API)

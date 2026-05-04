@@ -6,6 +6,78 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.7.2] — 2026-05-04
+
+A second pass of dogfooding turned up output rough edges (yellow being read
+as "warning" on plain status text, the table headers being green for no
+reason, `(no differences)` flipping colour between the per-bot line and the
+final summary), a few interactive UX gaps (no shell escape inside the REPL,
+no clear way to clear an optional credential, `list` and `help` not behaving
+the way a human expects in a REPL), and one Pandorabots-side limitation
+worth documenting (API-created bots don't appear in the developer dashboard,
+which means `atalk` can't get its bot_key for them).
+
+### Changed
+- Stripped meaningless colour from output across the board. Yellow is now
+  reserved for warnings / "action required" messages (`(dry run)`, alter
+  active, missing cache reference, `bot:create` action hint, push failure
+  count); green for successes (`compiled`, `Registered bot "X"`,
+  `batch: N/M ok`, `status: ✓ in sync`); red for delete / error; cyan for
+  informational arrows (`pull` `↓`, `debug` trace begin steps); everything
+  else (section headers, table column headers, empty-state markers like
+  `(no files)` / `(none configured)` / `(remote-only)`, byte sizes) is
+  plain. The `<info>` / `<comment>` styling on `$io->table()` headers is
+  also stripped via a project-local helper.
+- `config --show` prints credentials in plain text. Previously it masked
+  them by default and required `--plain` to reveal — but the entire reason
+  someone runs `--show` is to see what's stored, so masking fights intent.
+  The `--plain` flag is removed.
+- `config` interactive prompts likewise show the current value in cleartext
+  so the user can verify what's set before deciding whether to change it.
+  The "secret-aware mask in the prompt" behaviour from earlier development
+  is gone.
+- `list` / `help` / `completion` are hidden from the user-facing command
+  list. They still work if typed; they're transport-layer plumbing that
+  cluttered the workflow-facing overview.
+- REPL banner restated to point at the REPL-native shortcuts.
+
+### Added
+- REPL `?` and bare `help` route to `list`. `? <command>` is sugar for
+  `help <command>`. Symfony's bare `help` showed help-for-help, which is
+  useless in a REPL context.
+- REPL `! <cmd>` runs `<cmd>` in `/bin/sh` and continues. Useful during
+  edit / push / verify dogfooding loops where shelling out for a quick
+  `sed` or `cat` is needed.
+- REPL tab completion: a phantom NUL-terminated second candidate is
+  returned for single-match directory completions so libedit (which is
+  what macOS PHP links against) doesn't append the trailing space that
+  used to require a backspace before continuing.
+- `config` interactive prompts accept `-` as the literal "clear this
+  field" token, so optional fields (bot_key, host) can be unset without
+  dropping to the CLI flag form.
+- `bot:delete --force-unmanaged` lets you delete an unmanaged remote bot
+  (one that isn't registered locally). Use carefully — bypasses the
+  "local registration is the source of truth" guard, but spares the
+  3-step `add` → `bot:delete` → `remove` dance otherwise required for
+  cleanup of stray remote bots.
+- `remove` now surfaces the side effect of clearing the bot's bot_key
+  block from `.env` — silent .env mutations were surprising.
+- `(no differences)` is rendered identically (plain) on the per-bot line
+  and on the global summary line. The earlier mismatch (yellow per-bot,
+  green summary) was just inconsistent.
+- Bot directory paths in `bot:list` / `status` no longer show `/./` mid-path
+  artefacts (`${projectRoot}/./aiml/foo` → `${projectRoot}/aiml/foo`). The
+  stored form (`./aiml/foo` in `pb-migrate.json`) is unchanged; only the
+  resolved display is normalised.
+
+### Documented
+- README now describes the Pandorabots dashboard limitation and what it
+  means for `atalk`. Bots created via the Developer Portal API aren't
+  visible in the dashboard's bot list (verified after 5+ hours of waiting,
+  not a sync delay), and there's no API endpoint that returns the bot_key.
+  The practical workflow if you want `atalk` to work is to create the bot
+  in the dashboard first and `pb-migrate add` it locally.
+
 ## [0.7.1] — 2026-05-04
 
 Bare-name plumbing was incomplete in v0.7.0 — kinds whose URL has no filename

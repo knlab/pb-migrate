@@ -43,7 +43,7 @@ final class BatchCommand extends Command
         }
 
         if ($commands === []) {
-            $output->writeln(sprintf('<comment>(no commands in %s)</comment>', $file));
+            $output->writeln(sprintf('(no commands in %s)', $file));
             return Command::SUCCESS;
         }
 
@@ -51,7 +51,7 @@ final class BatchCommand extends Command
         $ran = 0;
         foreach ($commands as $line) {
             if ($echo) {
-                $output->writeln(sprintf('<info>$ %s</info>', $line));
+                $output->writeln(sprintf('$ %s', $line));
             }
             try {
                 $exit = $app->doRun(new StringInput($line), $output);

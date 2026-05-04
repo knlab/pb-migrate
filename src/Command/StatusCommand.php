@@ -72,7 +72,7 @@ final class StatusCommand extends AbstractBotCommand
         $statusLabel = $clean ? '✓ in sync (vs last push)' : sprintf('(+) %d add  (*) %d update', $adds, $updates);
 
         $io->writeln('');
-        $io->writeln(sprintf('<info>%s</info>', $bot->name));
+        $io->writeln($bot->name);
         $io->writeln(sprintf('  URL:       %s', $config->host()));
         $appId = $config->hasCredentials() ? $config->appId() : '(credentials not configured)';
         $io->writeln(sprintf('  BOT:       %s/%s', $appId, $bot->name));

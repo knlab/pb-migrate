@@ -87,6 +87,7 @@ final class ProjectConfig
             if (!self::isAbsolutePath($directory)) {
                 $directory = $projectRoot . DIRECTORY_SEPARATOR . $directory;
             }
+            $directory = self::collapseDots($directory);
 
             $rawPropertiesUpload = $botRaw['propertiesUpload'] ?? BotConfig::PROPERTIES_UPLOAD_ADDITIVE;
             if (!is_string($rawPropertiesUpload) || !in_array($rawPropertiesUpload, [BotConfig::PROPERTIES_UPLOAD_ADDITIVE, BotConfig::PROPERTIES_UPLOAD_FULL], true)) {
@@ -348,5 +349,23 @@ final class ProjectConfig
     private static function isAbsolutePath(string $path): bool
     {
         return $path !== '' && ($path[0] === '/' || preg_match('#^[A-Za-z]:[\\\\/]#', $path) === 1);
+    }
+
+    /**
+     * Collapse `/./` segments produced when the JSON-stored relative form
+     * (e.g. `./aiml/foo`) gets concatenated with the project root. Doesn't
+     * touch the filesystem (the directory may not exist yet at load time).
+     */
+    private static function collapseDots(string $path): string
+    {
+        // Iteratively replace `/./` with `/` until no more occurrences remain.
+        while (str_contains($path, '/./')) {
+            $path = str_replace('/./', '/', $path);
+        }
+        // Trailing `/.` (e.g. `${root}/.`) → drop the dot, keep one trailing slash.
+        if (str_ends_with($path, '/.')) {
+            $path = substr($path, 0, -1);
+        }
+        return $path;
     }
 }

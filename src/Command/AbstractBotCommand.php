@@ -94,4 +94,20 @@ abstract class AbstractBotCommand extends Command
     {
         return new SymfonyStyle($input, $output);
     }
+
+    /**
+     * Render a table with no header coloring. SymfonyStyle's default table
+     * style wraps header cells in `<info>` (green), which carries no semantic
+     * meaning here — so override the cell header format to plain.
+     *
+     * @param list<string> $headers
+     * @param list<list<string>> $rows
+     */
+    protected function plainTable(SymfonyStyle $io, array $headers, array $rows): void
+    {
+        $table = $io->createTable();
+        $table->getStyle()->setCellHeaderFormat('%s');
+        $table->setHeaders($headers)->setRows($rows)->render();
+        $io->newLine();
+    }
 }

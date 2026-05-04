@@ -21,8 +21,7 @@ final class ConfigCommand extends Command
     {
         $this->addOption('config', 'c', InputOption::VALUE_REQUIRED, 'Path to pb-migrate.json', ProjectConfig::DEFAULT_FILENAME);
         $this->addOption('bot', 'b', InputOption::VALUE_REQUIRED, 'Edit a bot_key for the named bot (instead of project credentials)');
-        $this->addOption('show', null, InputOption::VALUE_NONE, 'Display current values (masked) without editing');
-        $this->addOption('plain', null, InputOption::VALUE_NONE, 'When used with --show, print credentials in plain text instead of masked');
+        $this->addOption('show', null, InputOption::VALUE_NONE, 'Display current values without editing');
         $this->addOption('app-id', null, InputOption::VALUE_REQUIRED, 'Set PB_APP_ID non-interactively (skip prompt)');
         $this->addOption('user-key', null, InputOption::VALUE_REQUIRED, 'Set PB_USER_KEY non-interactively');
         $this->addOption('host', null, InputOption::VALUE_REQUIRED, 'Set PB_HOST non-interactively');
@@ -38,9 +37,11 @@ final class ConfigCommand extends Command
         $envPath = $projectRoot . DIRECTORY_SEPARATOR . '.env';
         $envFile = new EnvFile($envPath);
 
-        // Show mode — read-only display
+        // Show mode — read-only display (plain text; the user explicitly asked
+        // to see what's stored). For shoulder-surf-safe browsing, just don't
+        // run --show in a screen-shared session.
         if ($input->getOption('show')) {
-            return $this->showAll($io, $envFile, (bool) $input->getOption('plain'));
+            return $this->showAll($io, $envFile);
         }
 
         $botname = (string) ($input->getOption('bot') ?? '');
@@ -112,7 +113,7 @@ final class ConfigCommand extends Command
         } else {
             $io->writeln(sprintf('Editing bot_key for "%s" in .env', $botname));
             $io->writeln('');
-            $botKey = $this->promptWithDefault($io, $envName, $botKey, secret: true);
+            $botKey = $this->promptWithDefault($io, $envName, $botKey);
         }
 
         if ($botKey === '') {
@@ -122,7 +123,7 @@ final class ConfigCommand extends Command
                 unset($_ENV[$envName]);
                 $io->success(sprintf('Removed bot_key for "%s"', $botname));
             } else {
-                $io->writeln(sprintf('<comment>No bot_key was set for "%s"; nothing to do</comment>', $botname));
+                $io->writeln(sprintf('No bot_key was set for "%s"; nothing to do', $botname));
             }
             return Command::SUCCESS;
         }
@@ -135,63 +136,59 @@ final class ConfigCommand extends Command
         return Command::SUCCESS;
     }
 
-    private function showAll(SymfonyStyle $io, EnvFile $envFile, bool $plain): int
+    private function showAll(SymfonyStyle $io, EnvFile $envFile): int
     {
         $appBlock = $envFile->readBlock(EnvFile::BLOCK_APP) ?? [];
 
-        $io->writeln('<info>Project credentials:</info>');
-        $io->writeln(sprintf('  PB_APP_ID:   %s', $this->display($appBlock['PB_APP_ID'] ?? null, $plain)));
-        $io->writeln(sprintf('  PB_USER_KEY: %s', $this->display($appBlock['PB_USER_KEY'] ?? null, $plain)));
+        $io->writeln('Project credentials:');
+        $io->writeln(sprintf('  PB_APP_ID:   %s', $this->display($appBlock['PB_APP_ID'] ?? null)));
+        $io->writeln(sprintf('  PB_USER_KEY: %s', $this->display($appBlock['PB_USER_KEY'] ?? null)));
         $host = $appBlock['PB_HOST'] ?? null;
         $io->writeln(sprintf('  PB_HOST:     %s', $host ?? '(default: ' . ProjectConfig::DEFAULT_HOST . ')'));
 
         $io->writeln('');
-        $io->writeln('<info>Bot keys:</info>');
+        $io->writeln('Bot keys:');
         $allBlocks = $envFile->listBlocks();
         $botBlocks = array_filter($allBlocks, static fn (string $id) => str_starts_with($id, 'bot='));
         if ($botBlocks === []) {
-            $io->writeln('  <comment>(none configured)</comment>');
+            $io->writeln('  (none configured)');
         } else {
             foreach ($botBlocks as $blockId) {
                 $botname = substr($blockId, 4);
                 $vars = $envFile->readBlock($blockId) ?? [];
                 $envName = EnvFile::envNameForBotKey($botname);
-                $io->writeln(sprintf('  %s: %s', $botname, $this->display($vars[$envName] ?? null, $plain)));
+                $io->writeln(sprintf('  %s: %s', $botname, $this->display($vars[$envName] ?? null)));
             }
         }
         return Command::SUCCESS;
     }
 
-    private function display(?string $value, bool $plain): string
+    private function display(?string $value): string
     {
         if ($value === null || $value === '') {
-            return '<comment>(not set)</comment>';
+            return '(not set)';
         }
-        if ($plain) {
-            return $value;
-        }
-        return $this->mask($value);
+        return $value;
     }
 
-    private function mask(string $value): string
+    private function promptWithDefault(SymfonyStyle $io, string $label, string $default): string
     {
-        $len = strlen($value);
-        if ($len <= 8) {
-            return str_repeat('*', $len);
+        // Pass the current value as Symfony's default so it appears in the
+        // `[default]:` suffix and the user can verify what's currently stored
+        // before deciding to keep or replace it. The interactive prompt isn't
+        // logged to shell history; credentials shown here are credentials the
+        // user already has access to. `config --show` is the parallel viewer.
+        //
+        // Clearing semantics: a literal `-` is treated as "set to empty" so
+        // optional fields (bot_key, host) can be unset interactively. Required
+        // fields (app_id / user_key) still validate non-empty downstream and
+        // surface a clear error if `-` is used there.
+        $hint = $default !== '' ? ' [Enter to keep, "-" to clear]' : '';
+        $value = $io->ask($label . $hint, $default !== '' ? $default : null);
+        if (!is_string($value)) {
+            return $default;
         }
-        return substr($value, 0, 4) . str_repeat('*', max(4, $len - 8)) . substr($value, -4);
-    }
-
-    private function promptWithDefault(SymfonyStyle $io, string $label, string $default, bool $secret = false): string
-    {
-        if ($default !== '') {
-            $hint = $secret ? '(' . $this->mask($default) . ')' : '(' . $default . ')';
-            $question = sprintf('%s %s [Enter to keep]', $label, $hint);
-        } else {
-            $question = $label;
-        }
-        $value = $io->ask($question, $default);
-        return is_string($value) ? $value : $default;
+        return $value === '-' ? '' : $value;
     }
 
     private function resolveProjectRoot(string $configPath): string

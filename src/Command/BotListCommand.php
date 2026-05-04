@@ -27,7 +27,7 @@ final class BotListCommand extends AbstractBotCommand
 
         $bots = $config->bots();
         if ($bots === []) {
-            $io->writeln('<comment>(no bots registered. Run `pb-migrate add <directory>` to register one.)</comment>');
+            $io->writeln('(no bots registered. Run `pb-migrate add <directory>` to register one.)');
             return Command::SUCCESS;
         }
 
@@ -41,7 +41,7 @@ final class BotListCommand extends AbstractBotCommand
             ];
         }
 
-        $io->table(['name', 'directory', 'propertiesUpload', 'alters'], $rows);
+        $this->plainTable($io, ['name', 'directory', 'propertiesUpload', 'alters'], $rows);
         return Command::SUCCESS;
     }
 }

@@ -61,17 +61,20 @@ final class BotFilesCommand extends AbstractBotCommand
                 continue;
             }
 
-            $io->section(sprintf('%s (%d)', $section['title'], count($rows)));
+            $io->writeln('');
+            $title = sprintf('%s (%d)', $section['title'], count($rows));
+            $io->writeln($title);
+            $io->writeln(str_repeat('-', strlen($title)));
             // The Pandorabots API consistently reports size=0 for every entry,
             // so the column was always noise. Drop it.
-            $io->table(['name', 'modified'], $rows);
+            $this->plainTable($io, ['name', 'modified'], $rows);
             $printed += count($rows);
         }
 
         if ($printed === 0) {
-            $io->writeln('<comment>(no files)</comment>');
+            $io->writeln('(no files)');
         } else {
-            $io->writeln(sprintf('<comment>%d file(s) total</comment>', $printed));
+            $io->writeln(sprintf('%d file(s) total', $printed));
         }
 
         return Command::SUCCESS;

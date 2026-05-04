@@ -78,7 +78,7 @@ final class ReportCommand extends AbstractBotCommand
 
         $io->writeln('');
         $io->writeln(sprintf(
-            '<info>Total:</info> %d added, %d updated, %d remote-only',
+            'Total: %d added, %d updated, %d remote-only',
             $totalAdd,
             $totalUpdate,
             $totalDelete,
@@ -119,7 +119,7 @@ final class ReportCommand extends AbstractBotCommand
 
         if ($changes->isEmpty()) {
             $io->writeln('');
-            $io->writeln('  <comment>(no pending changes)</comment>');
+            $io->writeln('  (no pending changes)');
             return;
         }
 
@@ -169,7 +169,7 @@ final class ReportCommand extends AbstractBotCommand
     private function describeSize(FileChange $change, int &$totalBytes): string
     {
         if ($change->action === FileChange::DELETE || $change->localPath === null) {
-            return $change->action === FileChange::DELETE ? '<comment>(remote-only)</comment>' : '';
+            return $change->action === FileChange::DELETE ? '(remote-only)' : '';
         }
         if (!is_file($change->localPath)) {
             return '';
@@ -179,7 +179,7 @@ final class ReportCommand extends AbstractBotCommand
             return '';
         }
         $totalBytes += $bytes;
-        return sprintf('<comment>(%s)</comment>', $this->formatBytes($bytes));
+        return sprintf('(%s)', $this->formatBytes($bytes));
     }
 
     private function formatBytes(int $bytes): string

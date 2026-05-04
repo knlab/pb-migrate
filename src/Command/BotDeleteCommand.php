@@ -20,6 +20,7 @@ final class BotDeleteCommand extends AbstractBotCommand
         parent::configure();
         $this->addArgument('botname', InputArgument::REQUIRED, 'Name of the bot to delete on Pandorabots');
         $this->addOption('yes', 'y', InputOption::VALUE_NONE, 'Skip confirmation prompt');
+        $this->addOption('force-unmanaged', null, InputOption::VALUE_NONE, 'Allow deleting an unmanaged remote bot (one not registered locally). Use carefully — bypasses the "local registration is the source of truth" guard.');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -31,18 +32,20 @@ final class BotDeleteCommand extends AbstractBotCommand
         if ($botname === '') {
             throw new ConfigException('botname is required');
         }
-        if (!$config->hasBot($botname)) {
+
+        $forceUnmanaged = (bool) $input->getOption('force-unmanaged');
+        if (!$config->hasBot($botname) && !$forceUnmanaged) {
             throw new ConfigException(sprintf(
-                'bot "%s" is not registered locally. (Hint: `pb-migrate bot:remote` lists what exists on the account.)',
+                'bot "%s" is not registered locally. (Hint: `pb-migrate bot:remote` lists what exists on the account; pass --force-unmanaged to delete an unmanaged remote bot anyway.)',
                 $botname,
             ));
         }
 
         if (!$input->getOption('yes')) {
-            $confirmed = $io->confirm(sprintf(
-                'Really delete bot "%s" on Pandorabots? This is irreversible. (Local registration will be preserved; run `pb-migrate remove` to unregister.)',
-                $botname,
-            ), false);
+            $prompt = $config->hasBot($botname)
+                ? sprintf('Really delete bot "%s" on Pandorabots? This is irreversible. (Local registration will be preserved; run `pb-migrate remove` to unregister.)', $botname)
+                : sprintf('Really delete UNMANAGED bot "%s" on Pandorabots? This is irreversible.', $botname);
+            $confirmed = $io->confirm($prompt, false);
             if (!$confirmed) {
                 $io->writeln('Cancelled.');
                 return Command::SUCCESS;

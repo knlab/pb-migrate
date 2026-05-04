@@ -59,13 +59,13 @@ final class DebugCommand extends AbstractBotCommand
     {
         $responses = $reply->responses ?? [];
         $io->writeln('');
-        $io->writeln('<info>Response:</info>');
+        $io->writeln('Response:');
         if (is_array($responses) && $responses !== []) {
             foreach ($responses as $line) {
                 $io->writeln(sprintf('  <options=bold>%s</>', (string) $line));
             }
         } else {
-            $io->writeln('  <comment>(empty)</comment>');
+            $io->writeln('  (empty)');
         }
 
         $trace = $reply->trace ?? null;
@@ -77,7 +77,7 @@ final class DebugCommand extends AbstractBotCommand
         }
 
         $io->writeln('');
-        $io->writeln(sprintf('<info>Trace (%d steps):</info>', count($trace)));
+        $io->writeln(sprintf('Trace (%d steps):', count($trace)));
         foreach ($trace as $step) {
             if (!is_object($step)) {
                 continue;
@@ -133,7 +133,7 @@ final class DebugCommand extends AbstractBotCommand
                 $io->writeln(sprintf('%s    result: <options=bold>%s</>', $indent, $result));
                 break;
             default:
-                $io->writeln(sprintf('%s    <comment>%s</comment>', $indent, json_encode($step, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: ''));
+                $io->writeln(sprintf('%s    %s', $indent, json_encode($step, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: ''));
                 break;
         }
     }

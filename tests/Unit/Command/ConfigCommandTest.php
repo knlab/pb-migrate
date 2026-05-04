@@ -74,8 +74,12 @@ final class ConfigCommandTest extends TestCase
         );
     }
 
-    public function testConfigShowMasksSecrets(): void
+    public function testConfigShowPrintsValuesInPlainText(): void
     {
+        // `config --show` is the explicit "let me see what's stored" entry
+        // point, so it prints credentials in plaintext — masking would fight
+        // the user's intent. (The `feedback_credential_display_in_editor.md`
+        // memory captures the design rationale.)
         $f = new EnvFile($this->envPath);
         $f->writeBlock('app', ['PB_APP_ID' => 'app-secret-1234567890', 'PB_USER_KEY' => 'key-very-secret-abc']);
 
@@ -87,26 +91,10 @@ final class ConfigCommandTest extends TestCase
         $tester->assertCommandIsSuccessful();
 
         $display = $tester->getDisplay();
-        $this->assertStringNotContainsString('app-secret-1234567890', $display, 'masked by default');
-        $this->assertStringNotContainsString('key-very-secret-abc', $display);
+        $this->assertStringContainsString('app-secret-1234567890', $display);
+        $this->assertStringContainsString('key-very-secret-abc', $display);
         $this->assertStringContainsString('PB_APP_ID', $display);
-        $this->assertStringContainsString('***', $display);
-    }
-
-    public function testConfigShowPlainPrintsRawValues(): void
-    {
-        $f = new EnvFile($this->envPath);
-        $f->writeBlock('app', ['PB_APP_ID' => 'app-1234']);
-
-        $tester = new CommandTester((new Application())->find('config'));
-        $tester->execute([
-            '--config' => $this->configPath,
-            '--show' => true,
-            '--plain' => true,
-        ]);
-        $tester->assertCommandIsSuccessful();
-
-        $this->assertStringContainsString('app-1234', $tester->getDisplay(), 'plain mode shows actual values');
+        $this->assertStringContainsString('PB_USER_KEY', $display);
     }
 
     public function testConfigBotEmptyKeyRemovesBlock(): void

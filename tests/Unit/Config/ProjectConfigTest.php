@@ -45,7 +45,10 @@ final class ProjectConfigTest extends TestCase
         $cfg = ProjectConfig::load($path);
 
         $this->assertArrayHasKey('mybot', $cfg->bots());
-        $expected = (realpath($this->tmpDir) ?: $this->tmpDir) . '/./aiml/mybot';
+        // The `./` segment from the stored relative form is collapsed when
+        // the path is materialised against the project root, so listings /
+        // status output don't show `${root}/./aiml/...`.
+        $expected = (realpath($this->tmpDir) ?: $this->tmpDir) . '/aiml/mybot';
         $this->assertSame($expected, $cfg->bot('mybot')->directory);
         $this->assertSame(realpath($this->tmpDir), $cfg->projectRoot);
     }
