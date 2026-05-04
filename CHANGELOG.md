@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.4.1] — 2026-05-04
+
+### Changed
+- Minimum required `spontena/pb-php` bumped from `^2.1` to `^2.1.1`. The pb-migrate v0.4.0 workaround for pb-php v2.1.0's overly strict `fname` assertion in `deleteBotFile()` has been removed; pb-php v2.1.1+ accepts an empty `fname` for kinds whose URL has no filename (`pdefaults`, `properties`).
+
+### Internal
+- Cleaned up the three workaround sites (`FileDeleteCommand`, `BotSync` prune path, `BotSync` `propertiesUpload=full` path) so they now pass an empty `fname` directly when the file kind has no name in the URL, instead of a kind-name placeholder.
+- No user-facing behavior change.
+
+### Tests
+- Added integration tests `BotFilesCommandsTest` covering `bot:files`, `cat`, and `file:delete` end-to-end against the real Pandorabots API (5 scenarios).
+
 ## [0.4.0] — 2026-05-03
 
 ### Added

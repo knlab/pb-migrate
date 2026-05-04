@@ -63,14 +63,8 @@ final class FileDeleteCommand extends AbstractBotCommand
             }
         }
 
-        // Workaround for spontena/pb-php v2.1.0: deleteBotFile asserts fname
-        // is non-empty even when the URL ignores it (pdefaults / properties).
-        // Pass the kind value as a harmless placeholder; the URL builder drops
-        // it because FileKind::hasFilenameInPath() returns false for those kinds.
-        $fnameForApi = $name ?? $kind->value;
-
         $client->deleteBotFile(
-            fname: $fnameForApi,
+            fname: $name ?? '',
             fkind: $kind,
             botname: $bot->name,
         );

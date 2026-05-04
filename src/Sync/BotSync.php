@@ -61,12 +61,8 @@ final class BotSync
                 continue;
             }
             $io->writeln(sprintf('  <fg=red>-</> %s/%s', $change->kind->value, $change->name));
-            // Workaround for spontena/pb-php v2.1.0: deleteBotFile asserts fname
-            // is non-empty for kinds without a filename in the URL too. Pass
-            // the kind value as a placeholder for those kinds.
-            $fnameForApi = $change->kind->hasFilenameInPath() ? $change->name : $change->kind->value;
             $this->client->deleteBotFile(
-                fname: $fnameForApi,
+                fname: $change->kind->hasFilenameInPath() ? $change->name : '',
                 fkind: $change->kind,
                 botname: $bot->name,
             );
@@ -86,7 +82,7 @@ final class BotSync
                     $io->writeln('    <comment>(propertiesUpload=full: clearing remote properties first)</comment>');
                     try {
                         $this->client->deleteBotFile(
-                            fname: FileKind::Properties->value, // pb-php v2.1.0 placeholder; URL ignores it
+                            fname: '',
                             fkind: FileKind::Properties,
                             botname: $bot->name,
                         );
