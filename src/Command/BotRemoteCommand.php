@@ -1,0 +1,68 @@
+<?php
+
+declare(strict_types=1);
+
+namespace KnLab\PbMigrate\Command;
+
+use Symfony\Component\Console\Attribute\AsCommand;
+use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Output\OutputInterface;
+
+#[AsCommand(name: 'bot:remote', description: 'List bots on the Pandorabots account, annotated with local registration state')]
+final class BotRemoteCommand extends AbstractBotCommand
+{
+    protected function execute(InputInterface $input, OutputInterface $output): int
+    {
+        $io = $this->style($input, $output);
+        $config = $this->loadConfig($input);
+        $client = $this->client($config);
+
+        $remote = $client->getBotsList();
+
+        $io->writeln('');
+        $io->writeln(sprintf('<info>Account:</info> %s', $config->appId()));
+        $io->writeln(sprintf('<info>URL:</info>     %s', $config->host()));
+        $io->writeln('');
+
+        $registered = array_keys($config->bots());
+
+        // Render the remote-side list with annotations.
+        if ($remote === []) {
+            $io->writeln('<comment>No bots on the remote account.</comment>');
+        } else {
+            $io->writeln(sprintf('<info>Remote bots (%d):</info>', count($remote)));
+            $rows = [];
+            $remoteNames = [];
+            foreach ($remote as $entry) {
+                $name = isset($entry->botname) ? (string) $entry->botname : '';
+                if ($name === '') {
+                    continue;
+                }
+                $remoteNames[] = $name;
+                $compiled = !empty($entry->compiled) ? 'compiled' : 'uncompiled';
+                $tag = in_array($name, $registered, true)
+                    ? '<fg=green>registered</>'
+                    : '<fg=yellow>unmanaged</>';
+                $rows[] = [$name, $compiled, $tag];
+            }
+            $io->table(['name', 'state', 'tag'], $rows);
+        }
+
+        // Show locally-registered bots that don't yet exist on the remote.
+        $missing = array_values(array_diff($registered, $remoteNames ?? []));
+        if ($missing !== []) {
+            $io->writeln('');
+            $io->writeln(sprintf('<info>Registered but not on remote (%d):</info>', count($missing)));
+            foreach ($missing as $name) {
+                $io->writeln(sprintf(
+                    '  <fg=magenta>%s</>  <comment>(run `pb-migrate bot:create %s` to create)</comment>',
+                    $name,
+                    $name,
+                ));
+            }
+        }
+
+        return Command::SUCCESS;
+    }
+}

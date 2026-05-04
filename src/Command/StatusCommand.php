@@ -73,8 +73,9 @@ final class StatusCommand extends AbstractBotCommand
 
         $io->writeln('');
         $io->writeln(sprintf('<info>%s</info>', $bot->name));
-        $io->writeln(sprintf('  URL:       %s', $config->host));
-        $io->writeln(sprintf('  BOT:       %s/%s', $config->appId, $bot->name));
+        $io->writeln(sprintf('  URL:       %s', $config->host()));
+        $appId = $config->hasCredentials() ? $config->appId() : '(credentials not configured)';
+        $io->writeln(sprintf('  BOT:       %s/%s', $appId, $bot->name));
         $io->writeln(sprintf('  directory: %s', $bot->directory));
         $io->writeln(sprintf('  files:     %d local', $localCount));
         $io->writeln(sprintf('  status:    <fg=%s>%s</>', $statusColor, $statusLabel));

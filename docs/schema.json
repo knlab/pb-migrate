@@ -2,45 +2,22 @@
     "$schema": "http://json-schema.org/draft-07/schema#",
     "$id": "https://knlab.github.io/pb-migrate/schema.json",
     "title": "pb-migrate project configuration",
-    "description": "Schema for pb-migrate.json. The pb-migrate CLI reads this file to know which Pandorabots bots are managed by the project, where their AIML lives, and how to authenticate. String values support env-var substitution at load time using ${VAR} or ${VAR:-default} syntax; secrets should live in .env (gitignored), not in this file.",
+    "description": "Schema for pb-migrate.json. The file holds project structure only — the bots map and per-bot settings. Credentials (PB_APP_ID, PB_USER_KEY, PB_HOST, per-bot PB_BOT_<NAME>_KEY) live entirely in a project-local .env managed by `pb-migrate config`.",
     "type": "object",
     "additionalProperties": false,
-    "required": ["host", "appId", "userKey", "bots"],
+    "required": ["bots"],
     "properties": {
         "$schema": {
             "type": "string",
             "format": "uri",
             "description": "JSON Schema URL. IDEs use this for autocomplete and validation."
         },
-        "host": {
-            "type": "string",
-            "minLength": 1,
-            "description": "Pandorabots API host. Defaults via env-var to https://api.pandorabots.com.",
-            "examples": ["${PB_HOST:-https://api.pandorabots.com}", "https://api.pandorabots.com"]
-        },
-        "appId": {
-            "type": "string",
-            "minLength": 1,
-            "description": "Pandorabots application ID. Required. Typically supplied via ${PB_APP_ID} so the literal value lives in .env (gitignored), not this file.",
-            "examples": ["${PB_APP_ID}"]
-        },
-        "userKey": {
-            "type": "string",
-            "minLength": 1,
-            "description": "Pandorabots user key. Required. Typically supplied via ${PB_USER_KEY}.",
-            "examples": ["${PB_USER_KEY}"]
-        },
-        "botKey": {
-            "type": "string",
-            "description": "Optional bot key for atalk (anonymous talk). May be empty when atalk is not used.",
-            "examples": ["${PB_BOT_KEY:-}"]
-        },
         "bots": {
             "type": "object",
-            "description": "Map of bot name to per-bot configuration. The key is the bot name as it appears on Pandorabots; pb-migrate enforces that bot names are alphanumeric.",
+            "description": "Map of bot name to per-bot configuration. Bot names must be alphanumeric (Pandorabots constraint).",
             "minProperties": 0,
             "patternProperties": {
-                "^[A-Za-z0-9_-]+$": {
+                "^[A-Za-z0-9]+$": {
                     "$ref": "#/definitions/bot"
                 }
             },
@@ -59,11 +36,6 @@
                     "description": "Local directory containing the bot's AIML / set / map / substitution / pdefaults / properties files. Resolved relative to pb-migrate.json's location when relative.",
                     "examples": ["./aiml/mybot"]
                 },
-                "files": {
-                    "type": "string",
-                    "default": "*",
-                    "description": "Reserved for future glob-pattern filtering of files inside `directory`. Defaults to '*' (every file with a recognized extension)."
-                },
                 "propertiesUpload": {
                     "type": "string",
                     "enum": ["additive", "full"],
@@ -72,7 +44,7 @@
                 },
                 "alters": {
                     "type": "object",
-                    "description": "Persistent file-body overrides. Map of canonical file name (the name as it should appear on the bot) to a path of an override file. The override file's body is uploaded under the canonical name on every push, and its kind is inferred from the override path's extension. Designed for debug-session probes — temporary categories that dump predicates, simulate state, etc. — that should re-apply automatically while a session is active and be wiped with `alter:reset` when done. Manage with the alter:list / alter:set / alter:unset / alter:reset commands.",
+                    "description": "Persistent file-body overrides. Map of canonical file name to override path. The override file's body is uploaded under the canonical name on every push, and its kind is inferred from the override path's extension. Designed for debug-session probes (categories that dump predicates, simulate state, etc.) that should re-apply automatically while a session is active and be wiped with `alter:reset` when done. Manage via the alter:list / alter:set / alter:unset / alter:reset commands.",
                     "additionalProperties": {
                         "type": "string",
                         "minLength": 1,

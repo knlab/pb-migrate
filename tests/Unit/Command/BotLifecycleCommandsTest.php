@@ -35,11 +35,11 @@ final class BotLifecycleCommandsTest extends TestCase
         putenv('PB_APP_ID=app-x');
         putenv('PB_USER_KEY=key-x');
 
+        // bot:create / bot:delete now require the bot to be locally registered.
         file_put_contents($this->configPath, (string) json_encode([
-            'host' => 'https://api.pandorabots.com',
-            'appId' => '${PB_APP_ID}',
-            'userKey' => '${PB_USER_KEY}',
-            'bots' => [],
+            'bots' => [
+                'shinybot' => ['directory' => $this->tmpDir . '/aiml/shinybot'],
+            ],
         ], JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR));
     }
 
@@ -61,7 +61,7 @@ final class BotLifecycleCommandsTest extends TestCase
             'botname' => 'shinybot',
         ]);
         $tester->assertCommandIsSuccessful();
-        $this->assertStringContainsString('Created bot: shinybot', $tester->getDisplay());
+        $this->assertStringContainsString('Created bot on Pandorabots: shinybot', $tester->getDisplay());
 
         $req = $this->requestHistory[0]['request'];
         $this->assertSame('PUT', $req->getMethod());
@@ -79,7 +79,7 @@ final class BotLifecycleCommandsTest extends TestCase
             '--yes' => true,
         ]);
         $tester->assertCommandIsSuccessful();
-        $this->assertStringContainsString('Deleted bot: shinybot', $tester->getDisplay());
+        $this->assertStringContainsString('Deleted bot on Pandorabots: shinybot', $tester->getDisplay());
 
         $req = $this->requestHistory[0]['request'];
         $this->assertSame('DELETE', $req->getMethod());

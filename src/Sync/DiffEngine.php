@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace KnLab\PbMigrate\Sync;
 
-use SebastianBergmann\Diff\Differ;
-use SebastianBergmann\Diff\Output\UnifiedDiffOutputBuilder;
 use Spontena\PbPhp\Exception\ApiException;
 use Spontena\PbPhp\FileKind;
 use Spontena\PbPhp\PBClient;
@@ -82,10 +80,4 @@ final class DiffEngine
         return new FileChangeSet($changes);
     }
 
-    public function unified(string $local, string $remote, string $label): string
-    {
-        $builder = new UnifiedDiffOutputBuilder("--- remote/{$label}\n+++ local/{$label}\n", false);
-        $differ = new Differ($builder);
-        return $differ->diff($remote, $local);
-    }
 }

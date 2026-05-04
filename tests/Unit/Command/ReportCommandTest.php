@@ -26,10 +26,7 @@ final class ReportCommandTest extends TestCase
         putenv('PB_APP_ID=app-x');
         putenv('PB_USER_KEY=key-x');
 
-        file_put_contents($this->configPath, json_encode([
-            'host' => 'https://api.pandorabots.com',
-            'appId' => '${PB_APP_ID}',
-            'userKey' => '${PB_USER_KEY}',
+        file_put_contents($this->configPath, (string) json_encode([
             'bots' => [
                 'mybot' => ['directory' => $this->localDir],
             ],
@@ -56,9 +53,10 @@ final class ReportCommandTest extends TestCase
         $tester->assertCommandIsSuccessful();
 
         $display = $tester->getDisplay();
-        $this->assertStringContainsString('no cache reference yet', $display, 'should warn that cache is empty');
-        $this->assertStringContainsString('Local changes for bot', $display, 'cache mode should use the local-changes heading');
-        $this->assertStringContainsString('(+) file/greet', $display);
+        $this->assertStringContainsString('No cache reference yet', $display, 'should warn that cache is empty');
+        $this->assertStringContainsString('Local changes for bot', $display, 'cache mode uses the local-changes heading');
+        $this->assertStringContainsString('Additions', $display);
+        $this->assertStringContainsString('file/greet', $display);
     }
 
     public function testSinceCacheReportsUpdateWhenLocalHashDiffersFromCache(): void
@@ -76,13 +74,13 @@ final class ReportCommandTest extends TestCase
         $tester->assertCommandIsSuccessful();
 
         $display = $tester->getDisplay();
-        $this->assertStringContainsString('(*) file/greet', $display);
-        $this->assertStringNotContainsString('no cache reference yet', $display);
+        $this->assertStringContainsString('Updates', $display);
+        $this->assertStringContainsString('file/greet', $display);
+        $this->assertStringNotContainsString('No cache reference yet', $display);
     }
 
     public function testSinceCacheReportsDeleteWhenCacheHasEntryWithoutLocalFile(): void
     {
-        // No local greet.aiml; cache has it.
         $this->seedCacheEntry('mybot', FileKind::File, 'greet', hash('sha256', 'old-body'));
 
         $tester = new CommandTester((new Application())->find('report'));
@@ -92,10 +90,13 @@ final class ReportCommandTest extends TestCase
             '--since' => 'cache',
         ]);
         $tester->assertCommandIsSuccessful();
-        $this->assertStringContainsString('(-) file/greet', $tester->getDisplay());
+
+        $display = $tester->getDisplay();
+        $this->assertStringContainsString('Removals', $display);
+        $this->assertStringContainsString('file/greet', $display);
     }
 
-    public function testSinceCacheRejectsFullCheckCombo(): void
+    public function testSinceCacheRejectsVerifyRemoteCombo(): void
     {
         $tester = new CommandTester((new Application())->find('report'));
         $this->expectException(\KnLab\PbMigrate\Exception\ConfigException::class);
@@ -103,7 +104,7 @@ final class ReportCommandTest extends TestCase
             '--config' => $this->configPath,
             '--bot' => 'mybot',
             '--since' => 'cache',
-            '--full-check' => true,
+            '--verify-remote' => true,
         ]);
     }
 

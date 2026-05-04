@@ -57,15 +57,31 @@ final class BotSync
 
         foreach ($changes->byAction(FileChange::DELETE) as $change) {
             if (!$prune) {
-                $io->writeln(sprintf('  <fg=red>-</> %s/%s <comment>(skipped — pass --prune to delete)</comment>', $change->kind->value, $change->name));
+                $io->writeln(sprintf('  <fg=red>-</> %s/%s <comment>(skipped — --keep-remote-only mode)</comment>', $change->kind->value, $change->name));
                 continue;
             }
             $io->writeln(sprintf('  <fg=red>-</> %s/%s', $change->kind->value, $change->name));
-            $this->client->deleteBotFile(
-                fname: $change->kind->hasFilenameInPath() ? $change->name : '',
-                fkind: $change->kind,
-                botname: $bot->name,
-            );
+            try {
+                $this->client->deleteBotFile(
+                    fname: $change->kind->hasFilenameInPath() ? $change->name : '',
+                    fkind: $change->kind,
+                    botname: $bot->name,
+                );
+            } catch (ApiException $e) {
+                // Pandorabots-managed files (e.g. `udc`) reject DELETE with HTTP 412.
+                // Treat the same way pull treats 404 on system files: warning skip,
+                // continue. Local-as-source-of-truth doesn't extend to files the
+                // server refuses to surrender control of.
+                if ($e->getStatusCode() === 412) {
+                    $io->writeln(sprintf(
+                        '  <comment>skip %s/%s — server returned HTTP 412 (system-managed file)</comment>',
+                        $change->kind->value,
+                        $change->name,
+                    ));
+                    continue;
+                }
+                throw $e;
+            }
             $this->cache?->forget($bot->name, $change->kind, $change->name);
         }
 

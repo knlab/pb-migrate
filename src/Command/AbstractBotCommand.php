@@ -80,6 +80,16 @@ abstract class AbstractBotCommand extends Command
         return $factory->forConfig($config);
     }
 
+    /**
+     * Build a PBClient for atalk on a specific bot. Resolves the bot's bot_key
+     * from PB_BOT_<UPPER-NAME>_KEY. Throws if the key is not set.
+     */
+    protected function clientForAtalk(ProjectConfig $config, string $botname): PBClient
+    {
+        $factory = $this->factory ?? new PBClientFactory();
+        return $factory->forAtalk($config, $botname);
+    }
+
     protected function style(InputInterface $input, OutputInterface $output): SymfonyStyle
     {
         return new SymfonyStyle($input, $output);

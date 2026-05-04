@@ -35,10 +35,7 @@ final class TestCommandTest extends TestCase
         putenv('PB_APP_ID=app-x');
         putenv('PB_USER_KEY=key-x');
 
-        file_put_contents($this->configPath, json_encode([
-            'host' => 'https://api.pandorabots.com',
-            'appId' => '${PB_APP_ID}',
-            'userKey' => '${PB_USER_KEY}',
+        file_put_contents($this->configPath, (string) json_encode([
             'bots' => [
                 'mybot' => ['directory' => $this->tmpDir . '/aiml/mybot'],
             ],
@@ -52,7 +49,7 @@ final class TestCommandTest extends TestCase
         putenv('PB_USER_KEY');
     }
 
-    public function testInlineSingleCasePasses(): void
+    public function testInlineSingleCasePassesIsSilentByDefault(): void
     {
         $app = $this->appWithTalkResponses(['Hello, world.']);
 
@@ -65,8 +62,26 @@ final class TestCommandTest extends TestCase
         ]);
 
         $this->assertSame(0, $tester->getStatusCode(), 'matching reply must yield exit 0 for CI integration');
+        $display = $tester->getDisplay();
+        $this->assertStringNotContainsString('PASS', $display, 'default mode is silent on success');
+        $this->assertStringContainsString('All 1 test(s) passed', $display);
+    }
+
+    public function testVerboseShowsPass(): void
+    {
+        $app = $this->appWithTalkResponses(['Hello, world.']);
+
+        $tester = new CommandTester($app->find('test'));
+        $tester->execute([
+            '--config' => $this->configPath,
+            '--bot' => 'mybot',
+            '--input' => 'HELLO',
+            '--expect' => 'Hello, world.',
+            '--show-pass' => true,
+        ]);
+
+        $this->assertSame(0, $tester->getStatusCode());
         $this->assertStringContainsString('PASS', $tester->getDisplay());
-        $this->assertStringContainsString('All 1 test(s) passed', $tester->getDisplay());
     }
 
     public function testInlineSingleCaseFailsWithNonZeroExit(): void

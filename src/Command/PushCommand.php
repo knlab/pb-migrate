@@ -24,12 +24,12 @@ final class PushCommand extends AbstractBotCommand
         parent::configure();
         $this->addOption('dry-run', null, InputOption::VALUE_NONE, 'Show what would change without uploading');
         $this->addOption('skip-compile', null, InputOption::VALUE_NONE, 'Do not run compile after upload');
-        $this->addOption('prune', null, InputOption::VALUE_NONE, 'Delete remote files that are missing locally (off by default)');
-        $this->addOption('full-check', null, InputOption::VALUE_NONE, 'Bypass the local cache and verify every file against a fresh remote download');
+        $this->addOption('keep-remote-only', null, InputOption::VALUE_NONE, 'Preserve remote-only files (default behaviour rewrites remote to match local, deleting extras)');
+        $this->addOption('verify-remote', null, InputOption::VALUE_NONE, 'Bypass the local cache and verify every file against a fresh remote download');
         $this->addOption('only', null, InputOption::VALUE_REQUIRED, 'Comma-separated list of names (or kind/name) to push; everything else is skipped');
         $this->addOption('override', null, InputOption::VALUE_REQUIRED | InputOption::VALUE_IS_ARRAY, 'Temporarily swap a file body for this push only. Form: name=path/to/replacement (repeatable)');
         $this->addOption('interactive', 'i', InputOption::VALUE_NONE, 'Confirm each change individually before applying');
-        $this->addOption('properties-upload', null, InputOption::VALUE_REQUIRED, 'Override bot.propertiesUpload for this push: "additive" (default) or "full" (delete remote properties first)');
+        $this->addOption('properties-upload', null, InputOption::VALUE_REQUIRED, 'Override bot.propertiesUpload for this push: "additive" or "full" (delete remote properties first)');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -50,7 +50,7 @@ final class PushCommand extends AbstractBotCommand
                 throw new ConfigException(sprintf('--properties-upload must be "additive" or "full", got "%s"', $propsOverride));
             }
             $bots = array_map(
-                static fn (BotConfig $b) => new BotConfig($b->name, $b->directory, $b->filesPattern, $propsOverride),
+                static fn (BotConfig $b) => new BotConfig($b->name, $b->directory, $propsOverride, $b->alters),
                 $bots,
             );
         }
@@ -87,15 +87,22 @@ final class PushCommand extends AbstractBotCommand
 
         if ($bot->alters !== []) {
             $io->writeln(sprintf(
-                '<comment>%s: applying %d persistent alter(s) from config</comment>',
+                '<fg=yellow>%s: %d active alter(s) detected:</>',
                 $bot->name,
                 count($bot->alters),
+            ));
+            foreach ($bot->alters as $alterName => $alterPath) {
+                $io->writeln(sprintf('  - %s → %s', $alterName, $alterPath));
+            }
+            $io->writeln(sprintf(
+                '<comment>(use `pb-migrate alter:reset --bot %s` to clear before production push)</comment>',
+                $bot->name,
             ));
         }
 
         [$changes, $localFiles] = $sync->plan(
             bot: $bot,
-            fullCheck: (bool) $input->getOption('full-check'),
+            fullCheck: (bool) $input->getOption('verify-remote'),
             overrides: $effectiveOverrides,
         );
 
@@ -133,7 +140,10 @@ final class PushCommand extends AbstractBotCommand
             }
         }
 
-        $sync->applyPush($bot, $changes, $localFiles, $io, prune: (bool) $input->getOption('prune'));
+        // Default behaviour is destructive: remote-only files are deleted to
+        // match local. --keep-remote-only flips it to additive (legacy "no prune").
+        $prune = !$input->getOption('keep-remote-only');
+        $sync->applyPush($bot, $changes, $localFiles, $io, prune: $prune);
 
         if ($input->getOption('skip-compile')) {
             $io->writeln(sprintf('  <comment>%s: skipped compile</comment>', $bot->name));

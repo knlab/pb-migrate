@@ -32,12 +32,8 @@ abstract class IntegrationTestCase extends TestCase
         mkdir($this->tmpDir, 0o755, true);
 
         $this->configPath = $this->tmpDir . '/pb-migrate.json';
-        file_put_contents($this->configPath, json_encode([
-            'host' => getenv('PB_HOST') ?: 'https://api.pandorabots.com',
-            'appId' => '${PB_APP_ID}',
-            'userKey' => '${PB_USER_KEY}',
-            'botKey' => '${PB_BOT_KEY:-}',
-            'bots' => [],
+        file_put_contents($this->configPath, (string) json_encode([
+            'bots' => new \stdClass(),
         ], JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT));
 
         $this->app = new Application();
@@ -72,12 +68,8 @@ abstract class IntegrationTestCase extends TestCase
 
     protected function writeConfigForBot(string $botname, string $localDir): void
     {
-        file_put_contents($this->configPath, json_encode([
-            'host' => getenv('PB_HOST') ?: 'https://api.pandorabots.com',
-            'appId' => '${PB_APP_ID}',
-            'userKey' => '${PB_USER_KEY}',
-            'botKey' => '${PB_BOT_KEY:-}',
-            'bots' => [$botname => ['directory' => $localDir, 'files' => '*']],
+        file_put_contents($this->configPath, (string) json_encode([
+            'bots' => [$botname => ['directory' => $localDir]],
         ], JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT));
     }
 

@@ -136,9 +136,10 @@ final class PushCommandTest extends TestCase
         $this->assertNotContains('/bot/app-x/mybot/verify', $paths, '--skip-compile must skip compile');
     }
 
-    public function testPruneDeletesRemoteOnlyFiles(): void
+    public function testDeletesRemoteOnlyFilesByDefault(): void
     {
-        // Local has nothing; remote reports an old greet.
+        // Local has nothing; remote reports an old greet. Default behaviour
+        // (no flags) is destructive: remote-only files are deleted.
         $tester = $this->commandTester('push', [
             $this->okGetBotFiles(['files' => [['name' => 'greet.aiml']]]),
             $this->okStatus(),  // delete greet
@@ -147,31 +148,31 @@ final class PushCommandTest extends TestCase
         $tester->execute([
             '--config' => $this->configPath,
             '--bot' => 'mybot',
-            '--prune' => true,
         ]);
         $tester->assertCommandIsSuccessful();
 
         $methods = array_map(static fn ($t) => $t['request']->getMethod(), $this->requestHistory);
-        $this->assertContains('DELETE', $methods, 'prune must issue a DELETE for remote-only files');
+        $this->assertContains('DELETE', $methods, 'default push behaviour must delete remote-only files');
     }
 
-    public function testRemoteOnlyIsSkippedWithoutPrune(): void
+    public function testKeepRemoteOnlyPreservesRemoteOnlyFiles(): void
     {
         $tester = $this->commandTester('push', [
             $this->okGetBotFiles(['files' => [['name' => 'greet.aiml']]]),
             // No upload / delete responses queued — must not be called.
-            $this->okStatus(),  // compile (push still runs even if nothing is sent because there's a delete entry that's reported as skipped, and there are no add/update; let's check)
+            $this->okStatus(),  // compile (push still runs even if nothing is sent because there's a delete entry that's reported as skipped)
         ]);
-        // Expectation: changes contain a single DELETE that is skipped (--prune off).
-        // After "skipping", changeset is still non-empty (count() includes the skipped delete),
-        // so compile is invoked.
-        $tester->execute(['--config' => $this->configPath, '--bot' => 'mybot']);
+        $tester->execute([
+            '--config' => $this->configPath,
+            '--bot' => 'mybot',
+            '--keep-remote-only' => true,
+        ]);
         $tester->assertCommandIsSuccessful();
 
         $display = $tester->getDisplay();
-        $this->assertStringContainsString('skipped', $display, 'should mention prune skip');
+        $this->assertStringContainsString('skipped', $display, 'should mention skip when --keep-remote-only');
         $methods = array_map(static fn ($t) => $t['request']->getMethod(), $this->requestHistory);
-        $this->assertNotContains('DELETE', $methods, 'no DELETE should be sent without --prune');
+        $this->assertNotContains('DELETE', $methods, 'no DELETE with --keep-remote-only');
     }
 
     public function testOverrideUploadsUnderCanonicalName(): void

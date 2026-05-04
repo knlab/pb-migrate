@@ -17,7 +17,6 @@ final class BotConfig
     public function __construct(
         public readonly string $name,
         public readonly string $directory,
-        public readonly string $filesPattern = '*',
         public readonly string $propertiesUpload = self::PROPERTIES_UPLOAD_ADDITIVE,
         public readonly array $alters = [],
     ) {

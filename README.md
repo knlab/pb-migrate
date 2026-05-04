@@ -2,26 +2,35 @@
 
 [日本語版 / Japanese](README.ja.md)
 
-Command-line tool to sync local AIML projects with [Pandorabots](https://www.pandorabots.com/), built on top of [`spontena/pb-php`](https://github.com/spontena/pb-php).
+Command-line tool to manage existing AIML packages on [Pandorabots](https://www.pandorabots.com/), built on top of [`spontena/pb-php`](https://github.com/spontena/pb-php).
 
-`pb-migrate` is a modern OSS rewrite of an in-house CLI used at a former employer. It exposes only the publicly documented Pandorabots API surface, ships as a Symfony Console application, and includes an interactive REPL.
+`pb-migrate` is the OSS rewrite of an in-house deployment CLI. The tool treats your local AIML files as the source of truth, registers existing package directories, and pushes them to Pandorabots' Developer Portal API.
+
+## Concepts
+
+- **Local registration is the source of truth.** A bot must be registered locally (`pb-migrate add`) before it can be operated on remotely. Pandorabots-side state never authoritatively drives the local config.
+- **One project = one app_id.** A `pb-migrate.json` file describes a project; all bots under it share one Pandorabots application ID. Multi-app_id setups are out of scope.
+- **Credentials live in `.env`, structure in `pb-migrate.json`.** The JSON file is committable; the `.env` is gitignored. Both can be edited by the tool.
+- **Default `push` is destructive.** It rewrites the remote bot to match local. Pass `--keep-remote-only` to opt out.
 
 ## Features
 
-- `init` — scaffold a new AIML project (config + `.env.example` + sample AIML)
-- `bot:list` / `bot:create` / `bot:delete` / `bot:files` / `compile` — manage bots on Pandorabots
-- `push` — upload local AIML / set / map / substitution / pdefaults / properties to a bot, with content-hash diff detection (add / update / delete) and automatic `compile`
-- `pull` — download all bot files into the local project directory
-- `cat` — print a single remote file body to stdout (pipe / redirect friendly)
-- `file:delete` — surgical deletion of a single remote file
-- `diff` — show a unified diff between local and remote
-- `status` — show the local sync state of managed bots (no API calls)
-- `report` — generate an inspection report of pending changes for handoff documents
-- `test` — assert bot replies match expected outputs (CI-friendly exit codes)
-- `batch` — run a runbook file of pb-migrate commands
-- `alter:list` / `alter:set` / `alter:unset` / `alter:reset` — manage persistent file-body overrides for debug-session probes (auto-applied on every `push`)
+- `add` / `remove` — register or unregister an existing AIML package directory
+- `config` — interactively edit credentials (`.env`) for project or per-bot bot_keys
+- `bot:list` — show registered bots (local, no API call)
+- `bot:remote` — show bots on the Pandorabots account, annotated with registration state
+- `bot:create` / `bot:delete` / `bot:files` — remote bot lifecycle (require local registration)
+- `compile` — verify bots on Pandorabots
+- `push` — upload local files (destructive: rewrites remote to match local)
+- `pull` — download remote files into the local directory
+- `diff` — show file-level changes (UPD/ADD/DEL grouped, color-coded)
+- `report` — rich handoff report of pending changes
+- `status` — local sync state vs. cache (no API)
+- `cat` / `file:delete` — inspect or delete a single remote file
 - `talk` / `debug` / `atalk` — converse with a bot from the terminal
-- `--all` and `--bot 'pattern'` work across `push` / `pull` / `diff` / `compile` / `report` / `status` / `test` for multi-bot operations
+- `test` — assert bot replies match expected outputs
+- `batch` — run a runbook of pb-migrate commands
+- `alter:list` / `alter:set` / `alter:unset` / `alter:reset` — persistent file-body overrides for debug-session probes
 - Run `pb-migrate` with no arguments to drop into an interactive REPL
 
 ## Requirements
@@ -50,273 +59,203 @@ composer require --dev knlab/pb-migrate
 ## Quickstart
 
 ```bash
-mkdir my-bot && cd my-bot
-pb-migrate init . mybot
+mkdir -p ~/work/my-bots/aiml/mybot && cd ~/work/my-bots
+$EDITOR aiml/mybot/greetings.aiml          # write your AIML
 
-cp .env.example .env
-$EDITOR .env                    # set PB_APP_ID and PB_USER_KEY
+pb-migrate add ./aiml/mybot                # registers `mybot` in pb-migrate.json
+pb-migrate config                          # prompts for PB_APP_ID / PB_USER_KEY → writes .env
 
-pb-migrate bot:create mybot
-pb-migrate push --bot mybot     # uploads aiml/mybot/* and compiles
-pb-migrate talk hello mybot
-pb-migrate pull --bot mybot     # round-trip the files back
-pb-migrate diff --bot mybot     # → no differences
-pb-migrate                      # drop into REPL
+pb-migrate bot:create mybot                # creates the bot on Pandorabots
+pb-migrate push --bot mybot                # uploads aiml/mybot/* and compiles
+pb-migrate talk hello --bot mybot
+pb-migrate                                 # drop into REPL
 ```
 
 ## Configuration
 
-`pb-migrate.json` holds the project metadata (env-substitution syntax `${VAR}` and `${VAR:-default}` is supported):
+`pb-migrate.json` holds the project structure (no credentials):
 
 ```json
 {
   "$schema": "https://knlab.github.io/pb-migrate/schema.json",
-  "host": "${PB_HOST:-https://api.pandorabots.com}",
-  "appId": "${PB_APP_ID}",
-  "userKey": "${PB_USER_KEY}",
-  "botKey": "${PB_BOT_KEY:-}",
   "bots": {
-    "mybot": { "directory": "./aiml/mybot", "files": "*" }
+    "mybot": { "directory": "./aiml/mybot" },
+    "other": { "directory": "./aiml/other", "propertiesUpload": "full" }
   }
 }
 ```
 
-The `$schema` URL points at the published JSON Schema (in `docs/schema.json` and served via GitHub Pages). VS Code, JetBrains IDEs, and most JSON-aware editors pick it up automatically — you get autocomplete on field names, hovers on what each field does, and instant warnings on typos like `directry` or invalid `propertiesUpload` values. Schema drift is guarded against by a unit test (`tests/Unit/SchemaValidationTest`).
+The `$schema` URL points at the published JSON Schema. VS Code, JetBrains IDEs, and most JSON-aware editors pick it up automatically — autocomplete on field names, hovers explaining what each field does, and instant warnings on typos like `directry` or invalid `propertiesUpload` values.
 
-Secrets live in `.env` (which is gitignored by the scaffold) — never commit them. Supported variables:
+Per-bot fields:
+
+| Field | Required | Default | Notes |
+|---|---|---|---|
+| `directory` | yes | — | Path to the AIML package directory; relative to project root |
+| `propertiesUpload` | no | `additive` | `full` to delete remote properties before re-uploading (strict GitOps) |
+| `alters` | no | `{}` | Map of canonical name → override file path (debug-session probes; managed by `alter:*` commands) |
+
+Bot names must be alphanumeric (Pandorabots constraint).
+
+## Credentials (`.env`, tool-managed)
+
+The tool writes a project-local `.env` (gitignored) using block markers so user-managed lines are preserved:
+
+```bash
+# pb-migrate:begin app
+PB_APP_ID=12345678abcdef
+PB_USER_KEY=xxxxxxxxxxxxxxxxxxxx
+# pb-migrate:end app
+
+# pb-migrate:begin bot=secretbot
+PB_BOT_SECRETBOT_KEY=zzzzzzzzzzzzzzzzz
+# pb-migrate:end bot=secretbot
+
+# user-managed lines below this line are preserved on every tool write
+MY_OWN_VAR=foo
+```
 
 | Variable | Purpose |
 |---|---|
 | `PB_APP_ID` | Pandorabots application ID (required) |
 | `PB_USER_KEY` | Pandorabots user key (required) |
-| `PB_HOST` | API host. Defaults to `https://api.pandorabots.com`. |
-| `PB_BOT_KEY` | Bot key for `atalk` (optional) |
+| `PB_HOST` | API host. Defaults to `https://api.pandorabots.com` |
+| `PB_BOT_<UPPER_BOTNAME>_KEY` | Per-bot bot_key for `atalk`. Only the bots that need anonymous talk have one. |
+
+Edit via:
+
+```bash
+pb-migrate config                                  # prompts for project credentials
+pb-migrate config --app-id X --user-key Y          # CI / scripted form
+pb-migrate config --bot mybot                      # prompts for that bot's bot_key
+pb-migrate config --bot mybot --bot-key VALUE
+pb-migrate config --show                           # display all values, masked
+pb-migrate config --show --plain                   # display all values, plain text (use carefully)
+```
 
 ## Commands
 
 ```
-init <directory> [<botname>]            Scaffold a project
-bot:list                                List bots on Pandorabots (account-wide)
-bot:files --bot <botname>               List files stored on a single bot
-bot:create <botname>                    Create a bot
-bot:delete <botname> [--yes]            Delete a bot (asks for confirmation)
-compile [--bot ...|--all]               Compile (verify) one or more bots
-cat [<name>] --bot --kind               Print a single remote file body to stdout
-file:delete [<name>] --bot --kind       Delete a single remote file
-            [--yes]                     (omit name for pdefaults / properties)
-push  [--bot ...|--all] [--dry-run]     Push local AIML to bot(s)
-                        [--skip-compile]
-                        [--prune]
-                        [--full-check]
+add <directory> [--bot <name>] [--force]    Register a package directory
+remove <botname> [--yes]                    Unregister a bot (does not touch remote)
+config [--bot <name>] [--show] [--plain]    Edit credentials in .env
+       [--app-id X --user-key Y]
+       [--bot-key Z]
+bot:list                                    List registered bots (local, no API)
+bot:remote                                  List bots on the Pandorabots account, annotated
+bot:create <botname>                        Create a registered bot on Pandorabots
+bot:delete <botname> [--yes]                Delete a bot on Pandorabots
+bot:files --bot <botname>                   List files stored on a single bot
+compile [--bot ...|--all]                   Compile (verify) one or more bots
+push  [--bot ...|--all] [--dry-run]         Push local files to bot(s); destructive by default
+                        [--skip-compile]    (rewrites remote to match local; --keep-remote-only to opt out)
+                        [--keep-remote-only]
+                        [--verify-remote]
                         [--only=...]
                         [--override n=p]
                         [-i|--interactive]
                         [--properties-upload=additive|full]
-pull  [--bot ...|--all] [--only=...]    Pull bot files to the local directory
-diff  [--bot ...|--all] [--full-check]  Unified diff between local and remote
+pull  [--bot ...|--all] [--only=...]        Pull bot files to the local directory
+diff  [--bot ...|--all] [--verify-remote]   File-level UPD/ADD/DEL grouped diff
                         [--only=...]
-status [--bot ...|--all]                Local sync state of managed bots (no API)
-report [--bot ...|--all] [--full-check] Inspection report of pending changes
-                        [--only=...]    (handoff document format)
-                        [--since=cache] (no API; report local changes since
-                                         the last successful push/pull)
-test   [--bot ...|--all]                Assert bot replies match expected
-       --input X --expect Y             — single inline test, OR
-       --file tests.txt                 — load <input>|<expected> per line
-batch <runbook.txt>                     Run a list of commands from a file
-       [--continue-on-error]            (skip blank lines and `# comments`)
-       [--echo]
-alter:list  [--bot ...|--all]           List persistent alters configured per bot
-alter:set   <name> <path> --bot <bot>   Add/update a persistent alter (saved to config)
-alter:unset <name> --bot <bot>          Remove a single persistent alter
-alter:reset --bot <bot> [--yes]         Wipe every alter on a bot (debug cleanup)
-talk  <input> --bot <botname>           Talk to a bot
-debug <input> --bot <botname>           Talk with trace JSON
-atalk <input>                           Anonymous talk via PB_BOT_KEY
-repl                                    Interactive shell (default)
+status [--bot ...|--all]                    Local sync state of registered bots (no API)
+report [--bot ...|--all] [--verify-remote]  Rich handoff report of pending changes
+                        [--only=...]
+                        [--since=remote|cache]
+                        [--utf8-borders]
+test   [--bot ...|--all]                    Assert bot replies match expected; silent on success
+       --input X --expect Y                 inline test, OR
+       --file tests.txt                     <input>|<expected> per line
+       [--show-pass]                        also print PASS lines
+cat [<name>] --bot --kind                   Print a single remote file body to stdout
+file:delete [<name>] --bot --kind [--yes]   Delete a single remote file (omit name for pdefaults / properties)
+batch <runbook.txt> [--continue-on-error]   Execute a list of pb-migrate commands from a file
+                    [--echo]
+talk  <input> --bot <botname>               Talk to a bot
+debug <input> --bot <botname> [--json]      Talk with trace; default formatted, --json for raw
+atalk <input> --bot <botname>               Anonymous talk via per-bot bot_key
+alter:list [--bot ...|--all]                List persistent alters (defaults to --all)
+alter:set <name> <path> --bot <bot>         Add or update a persistent alter
+alter:unset <name> --bot <bot>              Remove a single persistent alter
+alter:reset --bot <bot> [--yes]             Wipe every alter on a bot
+repl                                        Interactive shell (default)
 ```
 
-For `--bot`, a glob pattern (`prod.*`) is accepted in addition to an exact bot name. Use `--all` to operate on every bot defined in `pb-migrate.json`.
+For `--bot`, a glob pattern (`prod.*`) is accepted in addition to an exact bot name. `--all` operates on every registered bot.
 
-Inside the REPL, you can issue any of the same subcommands (`bot:list`, `push --bot foo`, etc). Use `exit`, `quit`, or Ctrl-D to leave.
+## Push semantics
 
-## Push / pull semantics
+`push` is **destructive by default**: it rewrites the remote bot to match local. Files that exist on the remote but not locally are deleted. This matches the "local is source of truth" model — what's on disk is what should be on the bot.
 
-- **`push`** enumerates local files (extension → `FileKind`), compares them against `getBotFiles()`, and uploads only what differs (SHA-256 content hash). By default `push` is **additive** — files that exist remotely but not locally (including the bot's default files such as `udc`) are reported but not deleted. Pass `--prune` to delete them.
-- **`pull`** writes every remote file into the configured directory, restoring the canonical extension (`.aiml`, `.set`, `.map`, `.substitution`, or the bare kind name for `pdefaults` / `properties`).
-- **`diff`** runs the same plan and prints a unified diff for each updated file.
+To preserve remote-only files (e.g. files added via the Pandorabots dashboard by other team members), pass `--keep-remote-only`.
 
-Update detection is content-hash based; modification timestamps are not exposed by the Pandorabots API.
+Pandorabots-managed files like `udc` are never deletable (412 from the API); pb-migrate skips them with a warning regardless of mode.
 
-### Selective operations
+## Diff and report
 
-Each of `push`, `pull`, and `diff` accepts `--only` to limit the operation to specific files:
+`diff` shows file-level changes only — which files differ, in what category — without inline content diffs:
 
-```bash
-# only push the greet.aiml — leave everything else alone
-pb-migrate push --bot mybot --only greet
+```
+mybot:
+URL: https://api.pandorabots.com
+BOT: app-x/mybot
 
-# multiple targets, name or kind/name
-pb-migrate diff --bot mybot --only greet,fallback,set/colors
-
-# pull only one file from remote
-pb-migrate pull --bot mybot --only greet
+UPD(1):
+    file/greet
+ADD(1):
+    file/farewell
+DEL(1):
+    file/oldfile
 ```
 
-`push` additionally supports two more advanced flags for fine-grained control:
+`report` produces a richer document suitable for handoff notes / PR descriptions:
 
-```bash
-# temporarily swap the body of greet with a test variant — for THIS push only
-pb-migrate push --bot mybot --override greet=variants/greet-test.aiml
+```
+============================================================
+Pending changes for bot mybot
+============================================================
+Generated: 2026-05-04 18:30 (--since=remote)
 
-# walk through each detected change and confirm individually
-pb-migrate push --bot mybot --interactive
+--- Updates (1) ----------------------------------------
+  file/greet  (3.1 KB)
+
+--- Additions (1) --------------------------------------
+  file/farewell  (0.8 KB)
+
+--- Removals (1) ---------------------------------------
+  file/oldfile  (remote-only)
+
+--- Summary ----------------------------------------
+  1 added, 1 updated, 1 remote-only
+  Total local size: 3.9 KB
 ```
 
-`--override` accepts multiple times. The substitution lasts only for this command — your project files on disk are not modified.
+Both default to comparing against live remote. Pass `--since=cache` on `report` to compare against the local cache instead (no API call) — useful for seeing what changed locally since the last push/pull.
 
-### Persistent alters (debug-session probes)
+## Persistent alters (debug-session probes)
 
-`--override` is great for one-shot tweaks but inconvenient when you are running an investigative session: you might keep three or four debug probes active for an hour while talking to the bot, pushing repeatedly between iterations. `pb-migrate.json` can store these as **persistent alters** so they re-apply automatically on every `push`.
-
-Typical use cases:
-- inject a category that dumps internal predicates when you talk to the bot
-- inject a category that simulates "as if" some state has been written, to exercise a branching path
-- once the session is over, strip all alters before the next production push
-
-Manage the set with four commands:
+`--override` is great for one-shot tweaks. For longer investigative sessions where you want a few debug probes (a category that dumps internal predicates, one that simulates state, etc.) to re-apply on every push, register them as persistent alters:
 
 ```bash
-# add or update an entry
 pb-migrate alter:set _dump_predicates variants/dump-predicates.aiml --bot mybot
 pb-migrate alter:set greet variants/greet-debug.aiml --bot mybot
 
-# show what's currently configured
-pb-migrate alter:list --bot mybot
+pb-migrate push --bot mybot   # warns "2 active alter(s) detected"
+# … iterate, talk to bot, observe …
 
-# remove a single entry
-pb-migrate alter:unset greet --bot mybot
-
-# wipe every alter for this bot (debug-session cleanup)
-pb-migrate alter:reset --bot mybot
+pb-migrate alter:reset --bot mybot   # clear all probes before production push
+pb-migrate push --bot mybot
 ```
 
-This persists the entries under each bot in `pb-migrate.json`:
+`alter:list` flags missing override paths with `[missing!]` so a session in flight is visible at a glance.
 
-```json
-{
-  "bots": {
-    "mybot": {
-      "directory": "./aiml/mybot",
-      "alters": {
-        "_dump_predicates": "variants/dump-predicates.aiml",
-        "greet": "variants/greet-debug.aiml"
-      }
-    }
-  }
-}
-```
+> ⚠️ Persistent alters live in `pb-migrate.json`, which is typically committed. Run `alter:reset` before merging your config back into a shared branch — alters are meant to leave no trace once the debug session is over.
 
-When `push` runs, the alters are merged into the override set automatically. CLI `--override` still wins on conflict, letting you layer a one-shot test on top of a persistent debug-session alter.
+## Local cache
 
-The kind of each alter is inferred from the override file's extension (same rule as `--override`). The alter `name` need not exist as a canonical local file — using a fresh name like `_dump_predicates` adds a brand-new file to the bot's upload set, and `alter:unset` followed by another `push --prune` removes it from the remote.
+To avoid re-fetching every remote file on every `push` / `diff`, pb-migrate maintains a JSON cache (`.pb-migrate-cache.json`, gitignored) of the SHA-256 of each file at the time of the last successful push or pull. Pass `--verify-remote` to bypass the cache when you suspect dashboard edits or cache corruption.
 
-> ⚠️  Persistent alters live in `pb-migrate.json`, which is typically committed to git. Run `alter:reset` (or remove the entries manually) before merging your config back into a shared branch — the goal of an alter is to leave no trace once the debug session is over.
-
-### Local cache (`.pb-migrate-cache.json`)
-
-To avoid downloading every remote file on every `push` / `diff`, pb-migrate maintains a small JSON cache (`.pb-migrate-cache.json`, gitignored) of the SHA-256 of each file at the time of the last successful push or pull. On the next run:
-
-- if the local file hash matches the cached value, the file is treated as unchanged and **no remote body is fetched**;
-- if the local hash differs from the cached value, the file is uploaded as an UPDATE without fetching the remote body first;
-- files with no cache entry fall back to the original behavior (fetch remote body, compare hashes).
-
-This brings the API call count for an unchanged project down from O(N) to a single `getBotFiles()`.
-
-If you suspect that someone edited the remote bot directly (e.g. via the Pandorabots dashboard) and you want pb-migrate to reconcile against the *actual* remote state, pass `--full-check`. This bypasses the cache and verifies every conflicting file against a fresh download.
-
-### `report --since=cache` (no-API local-changes report)
-
-`status` already shows a **count** of locally-changed files since the last push/pull. When you need the **list** of those changes (for a PR description, handoff doc, or pre-merge sanity check) without spending API quota, run:
-
-```bash
-# what did I touch since the last push/pull?
-pb-migrate report --bot mybot --since=cache
-
-# across every bot
-pb-migrate report --all --since=cache
-```
-
-`--since=cache` flips the diff source from "live remote bot" to ".pb-migrate-cache.json" (the SHA-256 of every file last seen on push/pull). Detected changes:
-
-- `(+)` ADD — local file with no cache entry (new since last sync)
-- `(*)` UPDATE — local file whose hash differs from the cache
-- `(-)` DELETE — cache entry with no matching local file (would be removed by `push --prune`)
-
-The output format matches the default `report` so it pastes cleanly into the same handoff documents. If a bot has no cache entries yet (first run, or after clearing the cache), every local file is reported as new with a warning to `pull` / `push` once to establish a baseline.
-
-`--since=cache` cannot be combined with `--full-check` (which requires API access).
-
-### `propertiesUpload`: additive vs full replace
-
-`.properties` files have two upload strategies, configurable per bot:
-
-```json
-{
-  "bots": {
-    "prod-greeter": {
-      "directory": "./aiml/greeter",
-      "propertiesUpload": "full"
-    }
-  }
-}
-```
-
-| Mode | Behavior | Suited for |
-|---|---|---|
-| `additive` (default) | Just `PUT` the local body. The Pandorabots API merges with existing remote keys, so any keys not in your local file remain on the server. | Coexisting with dashboard edits made by ops; environments where multiple sources update properties |
-| `full` | `DELETE` the remote properties file first, then `PUT` the local body. The local file becomes authoritative — any keys not present locally are removed from the server. | Strict GitOps workflows; eliminating stale keys from previous deployments |
-
-Override per push with `--properties-upload=additive` or `--properties-upload=full`.
-
-### Multi-bot operations
-
-`push` / `pull` / `diff` / `compile` / `status` / `report` / `test` accept either `--all` (every bot in `pb-migrate.json`) or `--bot 'pattern'` (glob, e.g. `prod.*`):
-
-```bash
-pb-migrate status                            # all managed bots
-pb-migrate push --all --skip-compile         # bulk push, no compile
-pb-migrate report --bot 'staging.*'          # handoff report for staging bots
-pb-migrate test --all --file regression.txt  # regression suite across bots
-```
-
-### Runbooks (`batch`)
-
-A runbook is a plain-text file: one pb-migrate command per line. Comments (`#`) and blank lines are skipped.
-
-```
-# weekly-cleanup.txt
-# Run every Monday before standup
-
-# 1. Snapshot of state
-status --all
-
-# 2. Pull anything that drifted on staging
-pull --bot 'staging.*'
-
-# 3. Push pending local changes everywhere
-push --all
-```
-
-Run with:
-
-```bash
-pb-migrate batch weekly-cleanup.txt --echo --continue-on-error
-```
-
-`--echo` prints each command for CI logs/audit; `--continue-on-error` keeps going past failures (default is stop-on-first-failure).
-
-## Testing
+## Testing the code
 
 ```bash
 composer install
@@ -324,13 +263,11 @@ composer test                    # PHPUnit unit suite (mocked HTTP)
 composer analyse                 # PHPStan level 6
 ```
 
-The integration suite hits the real Pandorabots API and is **not** run by default. Provide credentials and select the `integration` suite explicitly:
+The integration suite hits the real Pandorabots API and is **not** run by default. Provide credentials and select the integration suite explicitly:
 
 ```bash
 PB_APP_ID=xxx PB_USER_KEY=yyy composer test:integration
 ```
-
-To exercise `atalk`, additionally set `PB_BOT_KEY` for an existing, compiled bot whose bot key has been issued in the Pandorabots dashboard.
 
 CI runs the unit suite on PHP 8.1 / 8.2 / 8.3 / 8.4 — see `.github/workflows/ci.yml`.
 

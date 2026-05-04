@@ -5,15 +5,13 @@ declare(strict_types=1);
 namespace KnLab\PbMigrate\Tests\Unit;
 
 use JsonSchema\Validator;
-use KnLab\PbMigrate\Command\InitCommand;
 use PHPUnit\Framework\TestCase;
 
 /**
  * Catches drift between docs/schema.json and the rest of the project — the
- * config templates we ship (sample project + scaffolded `init` output) MUST
- * validate against the schema. If someone adds a new field to BotConfig or
- * the InitCommand template without updating the schema (or vice versa), this
- * test fails loudly at CI time.
+ * config templates we ship (sample project, etc.) MUST validate against the
+ * schema. If someone adds a new field to BotConfig without updating the
+ * schema (or vice versa), this test fails loudly.
  */
 final class SchemaValidationTest extends TestCase
 {
@@ -35,85 +33,64 @@ final class SchemaValidationTest extends TestCase
         $this->assertSchemaPasses($configPath);
     }
 
-    public function testInitCommandGeneratedConfigPassesSchema(): void
+    public function testSchemaRejectsConfigMissingBots(): void
     {
-        $template = $this->invokeInitConfigTemplate('mybot');
-        $data = json_decode($template);
-        $this->assertNotNull($data, 'InitCommand template must produce valid JSON');
-
-        $validator = new Validator();
-        $validator->validate($data, (object) ['$ref' => 'file://' . realpath(self::$schemaPath)]);
-        $this->assertTrue(
-            $validator->isValid(),
-            sprintf('InitCommand template should validate against the schema. Errors: %s', $this->formatErrors($validator)),
-        );
-    }
-
-    public function testInitCommandGeneratedConfigPassesSchemaForArbitraryBotName(): void
-    {
-        // Cover the alphanumeric-and-_- character class on the bots map key.
-        $template = $this->invokeInitConfigTemplate('prod_greeter-2');
-        $data = json_decode($template);
-        $this->assertNotNull($data);
-
-        $validator = new Validator();
-        $validator->validate($data, (object) ['$ref' => 'file://' . realpath(self::$schemaPath)]);
-        $this->assertTrue(
-            $validator->isValid(),
-            sprintf('Generated config with mixed-case underscore bot name should pass: %s', $this->formatErrors($validator)),
-        );
-    }
-
-    public function testSchemaRejectsConfigMissingRequiredField(): void
-    {
-        $bad = (object) [
-            'host' => 'https://api.pandorabots.com',
-            // Intentionally missing appId / userKey / bots
-        ];
-        $validator = new Validator();
-        $validator->validate($bad, (object) ['$ref' => 'file://' . realpath(self::$schemaPath)]);
-        $this->assertFalse($validator->isValid(), 'config missing required fields should fail validation');
+        $bad = (object) [];  // no bots map
+        $this->assertSchemaFails($bad);
     }
 
     public function testSchemaRejectsBotMissingDirectory(): void
     {
         $bad = (object) [
-            'host' => 'https://api.pandorabots.com',
-            'appId' => '${PB_APP_ID}',
-            'userKey' => '${PB_USER_KEY}',
             'bots' => (object) [
-                'mybot' => (object) ['files' => '*'],
+                'mybot' => (object) [],  // no directory
             ],
         ];
-        $validator = new Validator();
-        $validator->validate($bad, (object) ['$ref' => 'file://' . realpath(self::$schemaPath)]);
-        $this->assertFalse($validator->isValid(), 'bot missing required `directory` should fail validation');
+        $this->assertSchemaFails($bad);
     }
 
     public function testSchemaRejectsUnknownPropertyOnBot(): void
     {
         $bad = (object) [
+            'bots' => (object) [
+                'mybot' => (object) [
+                    'directory' => './aiml/mybot',
+                    'directry' => './typo',  // intentional typo
+                ],
+            ],
+        ];
+        $this->assertSchemaFails($bad);
+    }
+
+    public function testSchemaRejectsLegacyTopLevelCredentialFields(): void
+    {
+        $legacy = (object) [
             'host' => 'https://api.pandorabots.com',
             'appId' => '${PB_APP_ID}',
             'userKey' => '${PB_USER_KEY}',
             'bots' => (object) [
+                'mybot' => (object) ['directory' => './aiml/mybot'],
+            ],
+        ];
+        $this->assertSchemaFails($legacy, 'top-level credentials should no longer pass the v0.7+ schema');
+    }
+
+    public function testSchemaRejectsLegacyFilesField(): void
+    {
+        $legacy = (object) [
+            'bots' => (object) [
                 'mybot' => (object) [
                     'directory' => './aiml/mybot',
-                    'directry' => './typo', // intentional typo to confirm additionalProperties: false
+                    'files' => '*',  // removed in v0.7
                 ],
             ],
         ];
-        $validator = new Validator();
-        $validator->validate($bad, (object) ['$ref' => 'file://' . realpath(self::$schemaPath)]);
-        $this->assertFalse($validator->isValid(), 'typo on bot config should be flagged by additionalProperties:false');
+        $this->assertSchemaFails($legacy);
     }
 
     public function testSchemaAcceptsAltersMap(): void
     {
         $config = (object) [
-            'host' => 'https://api.pandorabots.com',
-            'appId' => '${PB_APP_ID}',
-            'userKey' => '${PB_USER_KEY}',
             'bots' => (object) [
                 'mybot' => (object) [
                     'directory' => './aiml/mybot',
@@ -124,20 +101,12 @@ final class SchemaValidationTest extends TestCase
                 ],
             ],
         ];
-        $validator = new Validator();
-        $validator->validate($config, (object) ['$ref' => 'file://' . realpath(self::$schemaPath)]);
-        $this->assertTrue(
-            $validator->isValid(),
-            sprintf('alters map should validate. Errors: %s', $this->formatErrors($validator)),
-        );
+        $this->assertSchemaAccepts($config);
     }
 
     public function testSchemaAcceptsPropertiesUploadFull(): void
     {
         $config = (object) [
-            'host' => 'https://api.pandorabots.com',
-            'appId' => '${PB_APP_ID}',
-            'userKey' => '${PB_USER_KEY}',
             'bots' => (object) [
                 'mybot' => (object) [
                     'directory' => './aiml/mybot',
@@ -145,30 +114,32 @@ final class SchemaValidationTest extends TestCase
                 ],
             ],
         ];
-        $validator = new Validator();
-        $validator->validate($config, (object) ['$ref' => 'file://' . realpath(self::$schemaPath)]);
-        $this->assertTrue(
-            $validator->isValid(),
-            sprintf('propertiesUpload=full should validate. Errors: %s', $this->formatErrors($validator)),
-        );
+        $this->assertSchemaAccepts($config);
     }
 
     public function testSchemaRejectsInvalidPropertiesUploadValue(): void
     {
-        $config = (object) [
-            'host' => 'https://api.pandorabots.com',
-            'appId' => '${PB_APP_ID}',
-            'userKey' => '${PB_USER_KEY}',
+        $bad = (object) [
             'bots' => (object) [
                 'mybot' => (object) [
                     'directory' => './aiml/mybot',
-                    'propertiesUpload' => 'sometimes', // not in enum
+                    'propertiesUpload' => 'sometimes',  // not in enum
                 ],
             ],
         ];
-        $validator = new Validator();
-        $validator->validate($config, (object) ['$ref' => 'file://' . realpath(self::$schemaPath)]);
-        $this->assertFalse($validator->isValid(), 'invalid propertiesUpload value should fail validation');
+        $this->assertSchemaFails($bad);
+    }
+
+    public function testSchemaRejectsBotnameWithHyphen(): void
+    {
+        // Pandorabots rejects hyphens; our schema's patternProperties enforces
+        // alphanumeric only.
+        $bad = (object) [
+            'bots' => (object) [
+                'my-bot' => (object) ['directory' => './aiml/my-bot'],
+            ],
+        ];
+        $this->assertSchemaFails($bad);
     }
 
     private function assertSchemaPasses(string $configPath): void
@@ -186,11 +157,21 @@ final class SchemaValidationTest extends TestCase
         );
     }
 
-    private function invokeInitConfigTemplate(string $botname): string
+    private function assertSchemaAccepts(object $data, string $message = ''): void
     {
-        $reflection = new \ReflectionClass(InitCommand::class);
-        $method = $reflection->getMethod('configTemplate');
-        return (string) $method->invoke(null, $botname);
+        $validator = new Validator();
+        $validator->validate($data, (object) ['$ref' => 'file://' . realpath(self::$schemaPath)]);
+        $this->assertTrue(
+            $validator->isValid(),
+            $message ?: sprintf('expected schema to accept config. Errors: %s', $this->formatErrors($validator)),
+        );
+    }
+
+    private function assertSchemaFails(object $data, string $message = ''): void
+    {
+        $validator = new Validator();
+        $validator->validate($data, (object) ['$ref' => 'file://' . realpath(self::$schemaPath)]);
+        $this->assertFalse($validator->isValid(), $message ?: 'expected schema to reject config');
     }
 
     private function formatErrors(Validator $validator): string

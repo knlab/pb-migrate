@@ -50,12 +50,20 @@ final class CatCommand extends AbstractBotCommand
 
         $body = $client->getBotFile(kind: $kind, botname: $bot->name, name: $name);
 
-        // Use raw write so the output is byte-faithful and pipe-friendly.
+        // Byte-faithful when piped/redirected; on a TTY we add a trailing
+        // newline so the next prompt does not run into the last line of output.
         $output->write($body, false, OutputInterface::OUTPUT_RAW);
-        if (!str_ends_with($body, "\n")) {
+        if (self::stdoutIsTty() && !str_ends_with($body, "\n")) {
             $output->write("\n", false, OutputInterface::OUTPUT_RAW);
         }
 
         return Command::SUCCESS;
+    }
+
+    private static function stdoutIsTty(): bool
+    {
+        return function_exists('stream_isatty')
+            && defined('STDOUT')
+            && @stream_isatty(STDOUT);
     }
 }

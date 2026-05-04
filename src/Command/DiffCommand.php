@@ -9,8 +9,8 @@ use KnLab\PbMigrate\Sync\BotSync;
 use KnLab\PbMigrate\Sync\CacheStore;
 use KnLab\PbMigrate\Sync\DiffEngine;
 use KnLab\PbMigrate\Sync\FileChange;
+use KnLab\PbMigrate\Sync\FileChangeSet;
 use KnLab\PbMigrate\Sync\FileScanner;
-use Spontena\PbPhp\PBClient;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
@@ -18,13 +18,13 @@ use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
-#[AsCommand(name: 'diff', description: 'Show unified diff between local and remote bot files')]
+#[AsCommand(name: 'diff', description: 'Show file-level differences between local and remote bots (UPD/ADD/DEL grouped, color-coded)')]
 final class DiffCommand extends AbstractBotCommand
 {
     protected function configure(): void
     {
         parent::configure();
-        $this->addOption('full-check', null, InputOption::VALUE_NONE, 'Bypass the local cache and verify every file against a fresh remote download');
+        $this->addOption('verify-remote', null, InputOption::VALUE_NONE, 'Bypass the local cache and verify every file against a fresh remote download');
         $this->addOption('only', null, InputOption::VALUE_REQUIRED, 'Comma-separated list of names (or kind/name) to diff; everything else is omitted');
     }
 
@@ -37,57 +37,60 @@ final class DiffCommand extends AbstractBotCommand
 
         $only = $this->parseOnly((string) ($input->getOption('only') ?? ''));
         $cache = CacheStore::forProjectRoot($config->projectRoot);
-        $diff = new DiffEngine();
-        $sync = new BotSync($client, new FileScanner(), $diff, $cache);
+        $sync = new BotSync($client, new FileScanner(), new DiffEngine(), $cache);
 
         $hasAny = false;
         foreach ($bots as $bot) {
-            [$changes] = $sync->plan($bot, fullCheck: (bool) $input->getOption('full-check'));
+            [$changes] = $sync->plan($bot, fullCheck: (bool) $input->getOption('verify-remote'));
             if ($only !== []) {
                 $changes = $changes->filter($only);
             }
-            if ($changes->isEmpty()) {
-                $io->writeln(sprintf('<info>%s</info>: no differences', $bot->name));
-                continue;
+            $this->renderBot($io, $config->host(), $config->appId(), $bot, $changes);
+            if (!$changes->isEmpty()) {
+                $hasAny = true;
             }
-            $hasAny = true;
-            $io->writeln(sprintf('<info>%s</info>:', $bot->name));
-            $this->renderChanges($io, $diff, $client, $bot, $changes->all());
         }
 
         if (!$hasAny) {
+            $io->writeln('');
             $io->writeln('<info>(no differences)</info>');
         }
         return Command::SUCCESS;
     }
 
+    private function renderBot(SymfonyStyle $io, string $host, string $appId, BotConfig $bot, FileChangeSet $changes): void
+    {
+        $io->writeln('');
+        $io->writeln(sprintf('<info>%s:</info>', $bot->name));
+        $io->writeln(sprintf('URL: %s', $host));
+        $io->writeln(sprintf('BOT: %s/%s', $appId, $bot->name));
+
+        if ($changes->isEmpty()) {
+            $io->writeln('  <comment>(no differences)</comment>');
+            return;
+        }
+
+        $updates = $changes->byAction(FileChange::UPDATE);
+        $adds = $changes->byAction(FileChange::ADD);
+        $deletes = $changes->byAction(FileChange::DELETE);
+
+        $this->renderGroup($io, 'UPD', $updates, 'yellow');
+        $this->renderGroup($io, 'ADD', $adds, 'green');
+        $this->renderGroup($io, 'DEL', $deletes, 'red');
+    }
+
     /**
      * @param list<FileChange> $changes
      */
-    private function renderChanges(SymfonyStyle $io, DiffEngine $diff, PBClient $client, BotConfig $bot, array $changes): void
+    private function renderGroup(SymfonyStyle $io, string $label, array $changes, string $color): void
     {
+        if ($changes === []) {
+            return;
+        }
+        $io->writeln('');
+        $io->writeln(sprintf('<fg=%s>%s(%d):</>', $color, $label, count($changes)));
         foreach ($changes as $change) {
-            $label = $change->kind->value . '/' . $change->name;
-            switch ($change->action) {
-                case FileChange::ADD:
-                    $io->writeln(sprintf('  <fg=green># local-only: %s</>', $label));
-                    break;
-                case FileChange::DELETE:
-                    $io->writeln(sprintf('  <fg=red># remote-only: %s</>', $label));
-                    break;
-                case FileChange::UPDATE:
-                    if ($change->localPath === null) {
-                        continue 2;
-                    }
-                    $localContent = (string) file_get_contents($change->localPath);
-                    $remoteContent = $client->getBotFile(
-                        kind: $change->kind,
-                        botname: $bot->name,
-                        name: $change->kind->hasFilenameInPath() ? $change->name : null,
-                    );
-                    $io->writeln($diff->unified($localContent, $remoteContent, $label));
-                    break;
-            }
+            $io->writeln(sprintf('    %s/%s', $change->kind->value, $change->name));
         }
     }
 

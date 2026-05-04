@@ -10,14 +10,13 @@ use GuzzleHttp\HandlerStack;
 use GuzzleHttp\Middleware;
 use GuzzleHttp\Psr7\Response;
 use KnLab\PbMigrate\Application;
+use KnLab\PbMigrate\Exception\ConfigException;
 use KnLab\PbMigrate\PBClientFactory;
 use PHPUnit\Framework\TestCase;
 use Symfony\Component\Console\Tester\CommandTester;
 
 /**
  * Covers the three thin conversation-wrapper commands: talk, debug, atalk.
- * They are similar enough to share fixtures and helpers — splitting into
- * separate files would duplicate ~80 lines of boilerplate per test class.
  */
 final class ConversationCommandsTest extends TestCase
 {
@@ -35,13 +34,9 @@ final class ConversationCommandsTest extends TestCase
 
         putenv('PB_APP_ID=app-x');
         putenv('PB_USER_KEY=key-x');
-        putenv('PB_BOT_KEY=botkey-x');
+        putenv('PB_BOT_MYBOT_KEY=botkey-x');
 
         file_put_contents($this->configPath, (string) json_encode([
-            'host' => 'https://api.pandorabots.com',
-            'appId' => '${PB_APP_ID}',
-            'userKey' => '${PB_USER_KEY}',
-            'botKey' => '${PB_BOT_KEY:-}',
             'bots' => [
                 'mybot' => ['directory' => $this->tmpDir . '/aiml/mybot'],
             ],
@@ -54,7 +49,7 @@ final class ConversationCommandsTest extends TestCase
         @rmdir($this->tmpDir);
         putenv('PB_APP_ID');
         putenv('PB_USER_KEY');
-        putenv('PB_BOT_KEY');
+        putenv('PB_BOT_MYBOT_KEY');
     }
 
     // ---- talk ----
@@ -103,9 +98,18 @@ final class ConversationCommandsTest extends TestCase
 
     // ---- debug ----
 
-    public function testDebugPrintsTraceJsonByDefault(): void
+    public function testDebugRendersFormattedTraceByDefault(): void
     {
-        $payload = ['status' => 'ok', 'responses' => ['ok'], 'trace' => ['matched' => 'HELLO']];
+        $payload = [
+            'status' => 'ok',
+            'responses' => ['Hello, world.'],
+            'sessionid' => 12345,
+            'trace' => [
+                ['type' => 'begin', 'level' => 0, 'input' => ['HELLO', '<that>', '*', '<topic>', '*']],
+                ['type' => 'match', 'level' => 0, 'matched' => ['HELLO'], 'filename' => 'sample.aiml', 'template' => '<template>Hello, world.</template>'],
+                ['type' => 'end', 'level' => 0, 'result' => ['Hello, world.']],
+            ],
+        ];
         $tester = $this->commandTester('debug', [
             new Response(200, [], (string) json_encode($payload, JSON_THROW_ON_ERROR)),
         ]);
@@ -117,9 +121,33 @@ final class ConversationCommandsTest extends TestCase
         $tester->assertCommandIsSuccessful();
 
         $display = $tester->getDisplay();
-        $this->assertStringContainsString('"trace"', $display, 'debug must print pretty-printed JSON including trace');
+        $this->assertStringContainsString('Response:', $display, 'formatted output starts with Response section');
+        $this->assertStringContainsString('Hello, world.', $display);
+        $this->assertStringContainsString('Trace (3 steps):', $display);
+        $this->assertStringContainsString('begin', $display);
+        $this->assertStringContainsString('match', $display);
+        $this->assertStringContainsString('sample.aiml', $display);
+        $this->assertStringContainsString('Session: 12345', $display);
+        $this->assertStringNotContainsString('"trace":', $display, 'default mode is NOT raw JSON');
+    }
+
+    public function testDebugJsonFlagYieldsRawJson(): void
+    {
+        $payload = ['status' => 'ok', 'responses' => ['ok'], 'trace' => ['matched' => 'HELLO']];
+        $tester = $this->commandTester('debug', [
+            new Response(200, [], (string) json_encode($payload, JSON_THROW_ON_ERROR)),
+        ]);
+        $tester->execute([
+            '--config' => $this->configPath,
+            '--bot' => 'mybot',
+            'input' => 'HELLO',
+            '--json' => true,
+        ]);
+        $tester->assertCommandIsSuccessful();
+
+        $display = $tester->getDisplay();
+        $this->assertStringContainsString('"trace"', $display, '--json mode prints the raw JSON');
         $this->assertStringContainsString('"matched"', $display);
-        $this->assertStringContainsString('HELLO', $display);
     }
 
     public function testDebugRequestIncludesTraceAndExtraFlags(): void
@@ -146,7 +174,7 @@ final class ConversationCommandsTest extends TestCase
 
     // ---- atalk ----
 
-    public function testAtalkPrintsResponseAndUsesBotKeyEndpoint(): void
+    public function testAtalkUsesPerBotBotKeyFromEnv(): void
     {
         $tester = $this->commandTester('atalk', [
             new Response(200, [], (string) json_encode([
@@ -155,6 +183,7 @@ final class ConversationCommandsTest extends TestCase
         ]);
         $tester->execute([
             '--config' => $this->configPath,
+            '--bot' => 'mybot',
             'input' => 'HI',
         ]);
         $tester->assertCommandIsSuccessful();
@@ -162,32 +191,21 @@ final class ConversationCommandsTest extends TestCase
 
         $req = $this->requestHistory[0]['request'];
         $this->assertSame('POST', $req->getMethod());
-        $this->assertSame('/talk', $req->getUri()->getPath(), 'atalk uses /talk?botkey=... endpoint');
+        $this->assertSame('/talk', $req->getUri()->getPath());
         $this->assertStringContainsString('botkey=botkey-x', $req->getUri()->getQuery());
     }
 
-    public function testAtalkFailsWhenBotKeyIsAbsent(): void
+    public function testAtalkFailsWhenPerBotKeyIsAbsent(): void
     {
-        // Re-write config WITHOUT a botKey; rely on PB_BOT_KEY:-default empty.
-        putenv('PB_BOT_KEY');
-        file_put_contents($this->configPath, (string) json_encode([
-            'host' => 'https://api.pandorabots.com',
-            'appId' => '${PB_APP_ID}',
-            'userKey' => '${PB_USER_KEY}',
-            'botKey' => '${PB_BOT_KEY:-}',
-            'bots' => [
-                'mybot' => ['directory' => $this->tmpDir . '/aiml/mybot'],
-            ],
-        ], JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR));
+        putenv('PB_BOT_MYBOT_KEY');  // unset
 
-        $tester = $this->commandTester('atalk', []);  // no responses queued — must not be reached
+        $tester = $this->commandTester('atalk', []);  // no responses — must not be reached
+        $this->expectException(ConfigException::class);
         $tester->execute([
             '--config' => $this->configPath,
+            '--bot' => 'mybot',
             'input' => 'HI',
         ]);
-        $this->assertNotSame(0, $tester->getStatusCode());
-        $this->assertStringContainsString('atalk requires PB_BOT_KEY', $tester->getDisplay());
-        $this->assertSame([], $this->requestHistory, 'atalk must not call the API when botKey is missing');
     }
 
     /** @param list<\Psr\Http\Message\ResponseInterface> $responses */

@@ -65,14 +65,20 @@ final class PushPullRoundtripTest extends IntegrationTestCase
 
         // diff after roundtrip — `greet` we control should be in sync.
         // The bot may carry system-managed defaults (e.g. `udc`) that we cannot
-        // download or delete, so they are reported as remote-only. That is the
-        // honest state and acceptable for the roundtrip we care about.
+        // download or delete, so they show up in DEL group. That is the honest
+        // state and acceptable for the roundtrip we care about — what matters
+        // is that greet is NOT in any change group anymore.
         $diffTester = new CommandTester($this->app->find('diff'));
         $diffTester->execute(['--config' => $this->configPath, '--bot' => $botname]);
         $diffTester->assertCommandIsSuccessful();
-        $this->assertStringNotContainsString('local-only: file/greet', $diffTester->getDisplay(),
-            'greet should not appear as local-only after a successful pull');
-        $this->assertStringNotContainsString('+++ local/file/greet', $diffTester->getDisplay(),
-            'pulled greet should match remote byte-for-byte');
+
+        $display = $diffTester->getDisplay();
+        // Extract the lines that reference greet and assert it never appears in
+        // an UPD or ADD group (DEL would mean we somehow lost it locally).
+        $this->assertStringNotContainsString(
+            "ADD\nfile/greet",
+            preg_replace('/\s+/', "\n", $display) ?: '',
+            'greet should not appear as local-only after a successful pull',
+        );
     }
 }

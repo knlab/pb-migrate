@@ -6,6 +6,104 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.7.0] — 2026-05-04
+
+**Major redesign release. Breaking changes throughout.** A spec review revealed
+that pb-migrate had drifted from its actual operational domain (deploying existing
+AIML packages to Pandorabots) toward an npm/cargo-style "init a new project" model
+that didn't fit. v0.7 realigns: the tool now treats local registration as the
+source of truth, separates structure (`pb-migrate.json`) from credentials (`.env`),
+and exposes register / unregister / config commands matching the workflow.
+
+Per the project state, no breaking-change migration is provided — the tool was not
+yet in real-world use. Existing local `pb-migrate.json` files from v0.6.x will not
+be read; recreate them with `pb-migrate add`.
+
+### Removed (breaking)
+- `init` — the tool no longer creates new project skeletons or sample AIML. Bots
+  are registered from existing directories via `add`.
+- `--full-check` flag — renamed to `--verify-remote` everywhere (push / diff / report)
+- `--prune` flag — push is now destructive by default; opt out with `--keep-remote-only`
+- `report --next-push` — vestigial, replaced by the `--since` mechanism in v0.6.0
+- Top-level `appId` / `userKey` / `botKey` / `host` / `defaults` fields in
+  `pb-migrate.json` — credentials moved entirely to `.env`
+- `files` per-bot field — was reserved for unbuilt glob filtering; removed
+- `Sync/DiffEngine::unified()` and `sebastian/diff` dependency — `diff` is
+  file-level only now
+
+### Added
+- **`add <directory> [--bot <name>] [--force]`** — register an existing AIML
+  package directory in `pb-migrate.json`. Bot name defaults to directory basename.
+- **`remove <botname>`** — unregister a bot locally; preserves the remote bot
+  (use `bot:delete` separately to delete on Pandorabots)
+- **`config [--bot <name>] [--show] [--plain] [--app-id X --user-key Y --host Z --bot-key W]`**
+  — interactively (or via flags) edit credentials in a project-local `.env`
+  managed by the tool with block markers. `--show` displays current values masked,
+  `--plain` shows them in plain text.
+- **`bot:remote`** — list bots on the Pandorabots account, annotated with which
+  ones are locally registered vs. unmanaged, plus a separate "registered but not
+  on remote" section
+- **`Config/EnvFile`** — block-marker reader/writer for `.env`. Tool-managed
+  blocks (`# pb-migrate:begin <id>` … `# pb-migrate:end <id>`) coexist with
+  user-managed lines outside the markers.
+
+### Changed (breaking)
+- **`pb-migrate.json` schema** — drastically simplified. Now contains only
+  `bots` (and optional `$schema`). All credentials live in `.env`. One project
+  = one app_id (multi-app_id is out of scope; that pattern came from special
+  partnership API tiers, not the public Developer Portal pb-migrate targets).
+- **`bot:list` semantics** — now lists LOCAL registered bots (no API call). For
+  the previous account-wide listing, use the new `bot:remote`.
+- **`bot:create` / `bot:delete`** — refuse to operate on bots that are not
+  locally registered first. Run `pb-migrate add` before `bot:create`.
+- **`push` is destructive by default** — files on the remote that are missing
+  locally are deleted, matching the "local is source of truth" model. Pass
+  `--keep-remote-only` to preserve them. Pandorabots-managed files (`udc`)
+  are skipped with a warning when their delete returns 412.
+- **`diff` output completely rewritten** — file-level only, grouped by action
+  (`UPD(N)` yellow / `ADD(N)` green / `DEL(N)` red), no inline content diffs.
+  Aimigrate-style.
+- **`report` output completely rewritten** — rich handoff format with section
+  headings (Updates / Additions / Removals), generation timestamp, `--since`
+  mode indicator, total local size summary. ASCII borders by default,
+  `--utf8-borders` for box-drawing characters.
+- **`debug` default output is now formatted** — type-coloured trace steps
+  (begin / match / srai-begin / srai-end / sraix-begin / sraix-end / end) with
+  level-based indentation and bold-emphasised values. `--json` for raw JSON
+  (jq-friendly).
+- **`atalk` requires `--bot <name>`** — bot_key is now per-bot, looked up from
+  `PB_BOT_<UPPER_BOTNAME>_KEY`. Project-level `botKey` is gone.
+- **`test` is silent on success** — only failures print by default; pass
+  `--show-pass` to print PASS as well. Failure colour switched from red to
+  yellow (red is reserved for system errors). File format gained backslash
+  escapes: `\|` → `|`, `\\` → `\`.
+- **`alter:list` defaults to `--all`** — running it without selectors lists
+  alters across every registered bot. Output now flags missing override paths
+  with `[missing!]` so debug-session-in-flight is visible at a glance.
+- **`push` warns when alters are active** — protects against pushing debug
+  probes to production by surprise.
+- **`cat` output now TTY-aware** — adds a trailing newline only when stdout
+  is a terminal, byte-faithful when piped/redirected.
+
+### Removed config / fields
+- `pb-migrate.json` no longer accepts `host`, `appId`, `userKey`, `botKey`,
+  `defaults`. The schema rejects them.
+- Per-bot `files` field is removed.
+
+### Internal
+- `BotConfig::$filesPattern` removed
+- `ProjectConfig::saveBot` / `removeBot` added (new `add` / `remove` workflow)
+- `PBClientFactory::forAtalk(config, botname)` added (per-bot bot_key resolution)
+- `Sync/DiffEngine::unified()` removed
+- `sebastian/diff` dropped from runtime dependencies
+
+### Tests
+- 163 unit tests, 397 assertions, all passing
+- New `EnvFileTest`, `AddCommandTest`, `RemoveCommandTest`, `ConfigCommandTest`,
+  `BotRemoteCommandTest`
+- `InitCommandTest` deleted (init removed)
+- All other command tests updated for new schema and behaviour
+
 ## [0.6.1] — 2026-05-04
 
 Quality / tooling release — "test reinforcement". No user-facing functionality changes; bundles a published JSON Schema for the config plus comprehensive Command-level unit test coverage. **Total unit test count grows from 72 to 127 (+55 tests)**, leaving every CLI command with at least direct unit coverage.

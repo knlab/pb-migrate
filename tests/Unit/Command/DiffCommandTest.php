@@ -14,13 +14,8 @@ use PHPUnit\Framework\TestCase;
 use Symfony\Component\Console\Tester\CommandTester;
 
 /**
- * Covers the `diff` command's output formatting. HTTP layer mocked.
- *
- * Verified branches:
- *   - no differences  → "(no differences)"
- *   - local-only file → "# local-only: <kind>/<name>"
- *   - remote-only file → "# remote-only: <kind>/<name>"
- *   - updated file → unified diff with --- remote/file/<name> +++ local/file/<name>
+ * v0.7+: diff outputs file-level changes only, grouped by action
+ * (UPD / ADD / DEL) with color codes. The old per-file unified diff is gone.
  */
 final class DiffCommandTest extends TestCase
 {
@@ -39,9 +34,6 @@ final class DiffCommandTest extends TestCase
         putenv('PB_USER_KEY=key-x');
 
         file_put_contents($this->configPath, (string) json_encode([
-            'host' => 'https://api.pandorabots.com',
-            'appId' => '${PB_APP_ID}',
-            'userKey' => '${PB_USER_KEY}',
             'bots' => [
                 'mybot' => ['directory' => $this->localDir],
             ],
@@ -69,7 +61,7 @@ final class DiffCommandTest extends TestCase
         $this->assertStringContainsString('(no differences)', $tester->getDisplay());
     }
 
-    public function testReportsLocalOnlyForFileMissingFromRemote(): void
+    public function testReportsAddGroupForLocalOnlyFile(): void
     {
         file_put_contents($this->localDir . '/greet.aiml', "<aiml/>\n");
 
@@ -78,41 +70,40 @@ final class DiffCommandTest extends TestCase
         ]);
         $tester->execute(['--config' => $this->configPath, '--bot' => 'mybot']);
         $tester->assertCommandIsSuccessful();
-        $this->assertStringContainsString('# local-only: file/greet', $tester->getDisplay());
+
+        $display = $tester->getDisplay();
+        $this->assertStringContainsString('ADD(1)', $display, 'one ADD entry expected');
+        $this->assertStringContainsString('file/greet', $display);
     }
 
-    public function testReportsRemoteOnlyForFileMissingLocally(): void
+    public function testReportsDelGroupForRemoteOnlyFile(): void
     {
-        // No local greet; remote has it.
         $tester = $this->commandTester('diff', [
             $this->okGetBotFiles(['files' => [['name' => 'greet.aiml']]]),
-        ]);
-        $tester->execute(['--config' => $this->configPath, '--bot' => 'mybot']);
-        $tester->assertCommandIsSuccessful();
-        $this->assertStringContainsString('# remote-only: file/greet', $tester->getDisplay());
-    }
-
-    public function testShowsUnifiedDiffForUpdatedFile(): void
-    {
-        $localBody = "<aiml>local-version</aiml>\n";
-        $remoteBody = "<aiml>remote-version</aiml>\n";
-        file_put_contents($this->localDir . '/greet.aiml', $localBody);
-
-        $tester = $this->commandTester('diff', [
-            $this->okGetBotFiles(['files' => [['name' => 'greet.aiml']]]),
-            // DiffEngine fetches remote body to detect drift...
-            new Response(200, [], $remoteBody),
-            // ...then DiffCommand fetches it again to produce the unified output.
-            new Response(200, [], $remoteBody),
         ]);
         $tester->execute(['--config' => $this->configPath, '--bot' => 'mybot']);
         $tester->assertCommandIsSuccessful();
 
         $display = $tester->getDisplay();
-        $this->assertStringContainsString('--- remote/file/greet', $display);
-        $this->assertStringContainsString('+++ local/file/greet', $display);
-        $this->assertStringContainsString('-<aiml>remote-version</aiml>', $display);
-        $this->assertStringContainsString('+<aiml>local-version</aiml>', $display);
+        $this->assertStringContainsString('DEL(1)', $display);
+        $this->assertStringContainsString('file/greet', $display);
+    }
+
+    public function testReportsUpdGroupForChangedFile(): void
+    {
+        file_put_contents($this->localDir . '/greet.aiml', "<aiml>local-version</aiml>\n");
+
+        $tester = $this->commandTester('diff', [
+            $this->okGetBotFiles(['files' => [['name' => 'greet.aiml']]]),
+            new Response(200, [], "<aiml>remote-version</aiml>\n"),  // for hash compare
+        ]);
+        $tester->execute(['--config' => $this->configPath, '--bot' => 'mybot']);
+        $tester->assertCommandIsSuccessful();
+
+        $display = $tester->getDisplay();
+        $this->assertStringContainsString('UPD(1)', $display);
+        $this->assertStringContainsString('file/greet', $display);
+        $this->assertStringNotContainsString('---', $display, 'no unified diff in v0.7+');
     }
 
     /** @param list<\Psr\Http\Message\ResponseInterface> $responses */

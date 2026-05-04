@@ -46,28 +46,39 @@ final class Application extends BaseApplication
     private function defaultCommandClasses(): array
     {
         return [
-            Command\InitCommand::class,
+            // Local registration management
+            Command\AddCommand::class,
+            Command\RemoveCommand::class,
+            Command\ConfigCommand::class,
+            // Bot lifecycle (remote)
             Command\BotListCommand::class,
+            Command\BotRemoteCommand::class,
             Command\BotFilesCommand::class,
             Command\BotCreateCommand::class,
             Command\BotDeleteCommand::class,
             Command\CompileCommand::class,
+            // File operations
             Command\CatCommand::class,
             Command\FileDeleteCommand::class,
+            // Conversation
             Command\TalkCommand::class,
             Command\DebugCommand::class,
             Command\AtalkCommand::class,
+            // Sync
             Command\PushCommand::class,
             Command\PullCommand::class,
             Command\DiffCommand::class,
             Command\ReportCommand::class,
             Command\StatusCommand::class,
+            // Testing / batching
             Command\TestCommand::class,
             Command\BatchCommand::class,
+            // Alters
             Command\AlterListCommand::class,
             Command\AlterSetCommand::class,
             Command\AlterUnsetCommand::class,
             Command\AlterResetCommand::class,
+            // REPL
             Command\ReplCommand::class,
         ];
     }

@@ -4,42 +4,44 @@ declare(strict_types=1);
 
 namespace KnLab\PbMigrate\Command;
 
+use KnLab\PbMigrate\Config\ProjectConfig;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 
-#[AsCommand(name: 'bot:list', description: 'List bots on Pandorabots')]
+#[AsCommand(name: 'bot:list', description: 'List bots registered locally in pb-migrate.json (no API call). For account-wide listing, use `bot:remote`.')]
 final class BotListCommand extends AbstractBotCommand
 {
     protected function configure(): void
     {
-        // Override AbstractBotCommand: --bot is not relevant here.
-        $this->addOption('config', 'c', \Symfony\Component\Console\Input\InputOption::VALUE_REQUIRED, 'Path to pb-migrate.json', \KnLab\PbMigrate\Config\ProjectConfig::DEFAULT_FILENAME);
+        // Local-only, no --bot/--all needed.
+        $this->addOption('config', 'c', InputOption::VALUE_REQUIRED, 'Path to pb-migrate.json', ProjectConfig::DEFAULT_FILENAME);
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         $io = $this->style($input, $output);
         $config = $this->loadConfig($input);
-        $client = $this->client($config);
 
-        $bots = $client->getBotsList();
+        $bots = $config->bots();
         if ($bots === []) {
-            $io->writeln('<comment>(no bots)</comment>');
+            $io->writeln('<comment>(no bots registered. Run `pb-migrate add <directory>` to register one.)</comment>');
             return Command::SUCCESS;
         }
 
         $rows = [];
-        foreach ($bots as $bot) {
+        foreach ($bots as $name => $bot) {
             $rows[] = [
-                $bot->botname ?? '',
-                $bot->language ?? '',
-                ($bot->compiled ?? false) ? 'yes' : 'no',
+                $name,
+                $bot->directory,
+                $bot->propertiesUpload,
+                $bot->alters !== [] ? sprintf('%d alter(s)', count($bot->alters)) : '',
             ];
         }
 
-        $io->table(['botname', 'language', 'compiled'], $rows);
+        $io->table(['name', 'directory', 'propertiesUpload', 'alters'], $rows);
         return Command::SUCCESS;
     }
 }

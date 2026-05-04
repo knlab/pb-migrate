@@ -11,7 +11,7 @@ use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 
-#[AsCommand(name: 'atalk', description: 'Anonymous talk via botkey (POST /talk?botkey=...)')]
+#[AsCommand(name: 'atalk', description: 'Anonymous talk via per-bot bot_key (POST /talk?botkey=...)')]
 final class AtalkCommand extends AbstractBotCommand
 {
     protected function configure(): void
@@ -26,13 +26,9 @@ final class AtalkCommand extends AbstractBotCommand
     {
         $io = $this->style($input, $output);
         $config = $this->loadConfig($input);
+        $bot = $this->resolveBot($config, $input);
 
-        if ($config->botKey === null) {
-            $io->error('atalk requires PB_BOT_KEY (botKey in pb-migrate.json) to be set.');
-            return Command::FAILURE;
-        }
-
-        $client = $this->client($config);
+        $client = $this->clientForAtalk($config, $bot->name);
         $reply = $client->atalk(
             input: (string) $input->getArgument('input'),
             clientName: (string) $input->getOption('client-name'),
