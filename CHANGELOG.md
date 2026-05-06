@@ -276,7 +276,7 @@ Quality / tooling release — "test reinforcement". No user-facing functionality
   - `alter:unset <name> --bot <bot>` — remove a single alter
   - `alter:reset --bot <bot> [--yes]` — remove every alter on a bot (debug-session cleanup)
 
-  Use case: ports the `alter` workflow from the legacy `aimigrate` tool — temporarily inject debug probes (e.g. a category that dumps internal predicates, or one that simulates "as if" some state has been written) and have them auto-apply on every push during an investigative session, then strip them before going to production. The CLI `--override` continues to work and wins on conflict so one-shot tests can layer on top of a persistent alter set.
+  Use case: an `alter` workflow inherited from an in-house predecessor tool — temporarily inject debug probes (e.g. a category that dumps internal predicates, or one that simulates "as if" some state has been written) and have them auto-apply on every push during an investigative session, then strip them before going to production. The CLI `--override` continues to work and wins on conflict so one-shot tests can layer on top of a persistent alter set.
 
 ### Fixed
 - **`push --override` was uploading files under the override path's basename, not the canonical name.** For example, `push --bot mybot --override greet=variants/greet-test.aiml` would upload to `/file/greet-test` instead of `/file/greet`, so the canonical `greet` file on the bot was never updated by an override. Existed since v0.2.0; surfaced now while writing the integration test for the new alter feature, which exercised the same code path.

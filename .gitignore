@@ -9,3 +9,6 @@
 .env.local
 .pb-migrate-cache.json
 *.swp
+
+# Local-only maintainer scripts (not for public distribution)
+tools/
