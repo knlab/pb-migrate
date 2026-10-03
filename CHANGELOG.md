@@ -6,6 +6,50 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.7.3] — 2026-10-03
+
+pb-php shipped a security release (2.1.4) that pins patched Guzzle versions
+and strips response bodies and credential-bearing query strings from its
+exception messages. This release adopts it and re-attaches the server's own
+error explanation on the pb-migrate side, so API failures stay readable.
+It also lands two sync-safety changes that had been dogfooded locally:
+`pull` no longer overwrites files edited since the last sync, and `push`
+refuses local trees whose files would collide under Pandorabots' flat
+remote namespace.
+
+### Security
+- Require `spontena/pb-php ^2.1.4`, which in turn requires
+  `guzzlehttp/guzzle ^7.15.2` and `guzzlehttp/psr7 ^2.12.3`. `composer audit`
+  on the previous lock reported 13 advisories against Guzzle (one high);
+  the updated lock reports none. Run `composer update` in existing installs
+  — a lock file is not updated by this change alone.
+
+### Added
+- `pull` protects un-pushed local edits. Before writing a file it compares
+  the local SHA-256 with the hash recorded in the cache at the last sync;
+  a mismatch skips the file with a warning and a per-bot summary count. No
+  cache entry (first pull, manually dropped-in file) falls through and
+  writes, preserving first-pull behaviour. `pull --force` restores the old
+  unconditional overwrite.
+- `FileScanner` refuses local trees where two files map to the same remote
+  name (e.g. `ja/greet.aiml` and `en/greet.aiml` both upload as
+  `file/greet`). The `ConfigException` lists every colliding path. Same
+  basename across different kinds (`foo.set` / `foo.map`) is still fine.
+- `ApiErrorMessage` helper surfaces the `message` field of the API's JSON
+  error body wherever an `ApiException` is shown: REPL error line, `batch`
+  failure line, `test` FAIL line, the error block of a direct CLI run
+  (as a trailing `Server message:` line), and the `pull` / `push` skip lines
+  for HTTP 4xx / 412 on system-managed files. Bodies without a usable
+  message render exactly as before.
+- README: "Error handling" section (what the exception message now carries,
+  where the server detail appears, logging precautions) and "Pull semantics"
+  section (cache-hash comparison table, skip output, `--force`).
+
+### Changed
+- `composer analyse` runs PHPStan with `--memory-limit=1G`.
+- `.gitignore` excludes local AI-agent instruction files (`CLAUDE.md`,
+  `AGENTS.md`, `.claude/`, `.codex/`).
+
 ## [0.7.2] — 2026-05-04
 
 A second pass of dogfooding turned up output rough edges (yellow being read
