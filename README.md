@@ -175,6 +175,7 @@ push  [--bot ...|--all] [--dry-run]         Push local files to bot(s); destruct
                         [-i|--interactive]
                         [--properties-upload=additive|full]
 pull  [--bot ...|--all] [--only=...]        Pull bot files to the local directory
+                        [--force]           (skips locally edited files; --force to overwrite)
 diff  [--bot ...|--all] [--verify-remote]   File-level UPD/ADD/DEL grouped diff
                         [--only=...]
 status [--bot ...|--all]                    Local sync state of registered bots (no API)
@@ -209,6 +210,27 @@ For `--bot`, a glob pattern (`prod.*`) is accepted in addition to an exact bot n
 To preserve remote-only files (e.g. files added via the Pandorabots dashboard by other team members), pass `--keep-remote-only`.
 
 Pandorabots-managed files like `udc` are never deletable (412 from the API); pb-migrate skips them with a warning regardless of mode.
+
+## Pull semantics
+
+`pull` writes remote files into the local directory, but it will not silently discard work you have not pushed yet. For each file it compares the local SHA-256 with the hash recorded in the [local cache](#local-cache) at the last successful push or pull:
+
+| Local file | Cache entry | Result |
+|---|---|---|
+| hash matches cache | yes | overwritten (no local edits since last sync) |
+| hash differs from cache | yes | **skipped** with a warning — you edited it locally |
+| exists | none | overwritten (first pull, or a file dropped in manually) |
+| missing | — | written |
+
+```
+mybot:
+  skip file/greet — local file edited since last sync (use --force to overwrite)
+  1 file(s) skipped due to local edits
+```
+
+Pass `--force` to overwrite regardless. If you want the remote version but also want to keep your edits, `diff --bot mybot` first, or commit the local directory before pulling.
+
+Files the server refuses to serve (HTTP 4xx on system-managed files such as `udc`) are skipped with the server's message — see [Error handling](#error-handling).
 
 ## Diff and report
 
