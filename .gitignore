@@ -12,3 +12,9 @@
 
 # Local-only maintainer scripts (not for public distribution)
 tools/
+
+# Local AI-agent instructions
+CLAUDE.md
+AGENTS.md
+.claude/
+.codex/
