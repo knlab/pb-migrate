@@ -37,6 +37,6 @@
     "scripts": {
         "test": "phpunit",
         "test:integration": "phpunit --testsuite integration",
-        "analyse": "phpstan analyse src --level=6"
+        "analyse": "phpstan analyse src --level=6 --memory-limit=1G"
     }
 }
