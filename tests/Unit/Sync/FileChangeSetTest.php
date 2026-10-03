@@ -20,6 +20,7 @@ final class FileChangeSetTest extends TestCase
             new FileChange(FileChange::UPDATE, FileKind::File, 'fallback'),
             new FileChange(FileChange::DELETE, FileKind::Set, 'colors'),
             new FileChange(FileChange::UPDATE, FileKind::Map, 'greet'),
+            new FileChange(FileChange::UPDATE, FileKind::Properties, ''),
         ]);
     }
 
@@ -47,6 +48,21 @@ final class FileChangeSetTest extends TestCase
     {
         $filtered = $this->set->filter([]);
         $this->assertSame($this->set->all(), $filtered->all());
+    }
+
+    public function testFilterByBareKindSelectsPropertiesAndPdefaults(): void
+    {
+        // Bare-name kinds have an empty name, so neither "name" nor
+        // "kind/name" can address them. The bare kind value must.
+        $filtered = $this->set->filter(['properties']);
+        $this->assertCount(1, $filtered->all());
+        $this->assertSame(FileKind::Properties, $filtered->all()[0]->kind);
+    }
+
+    public function testFilterByBareKindDoesNotMatchNamedKinds(): void
+    {
+        $filtered = $this->set->filter(['file']);
+        $this->assertSame([], $filtered->all(), '"file" is not a bare-name kind, so it must not act as a kind-wide wildcard');
     }
 
     public function testFilterNoMatchReturnsEmpty(): void

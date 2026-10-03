@@ -25,7 +25,7 @@ Command-line tool to manage existing AIML packages on [Pandorabots](https://www.
 - `pull` — download remote files into the local directory
 - `diff` — show file-level changes (UPD/ADD/DEL grouped, color-coded)
 - `report` — rich handoff report of pending changes
-- `status` — local sync state vs. cache (no API)
+- `status` — local sync state vs. cache: files added, edited or deleted since the last push / pull (no API)
 - `cat` / `file:delete` — inspect or delete a single remote file
 - `talk` / `debug` / `atalk` — converse with a bot from the terminal
 - `test` — assert bot replies match expected outputs
@@ -203,6 +203,8 @@ repl                                        Interactive shell (default)
 
 For `--bot`, a glob pattern (`prod.*`) is accepted in addition to an exact bot name. `--all` operates on every registered bot.
 
+`--only` takes a comma-separated list of file names (`greet`), `kind/name` pairs (`file/greet`, `set/colors`), or the bare kind for the two kinds that have no name of their own (`properties`, `pdefaults`).
+
 ## Push semantics
 
 `push` is **destructive by default**: it rewrites the remote bot to match local. Files that exist on the remote but not locally are deleted. This matches the "local is source of truth" model — what's on disk is what should be on the bot.
@@ -229,6 +231,14 @@ mybot:
 ```
 
 Pass `--force` to overwrite regardless. If you want the remote version but also want to keep your edits, `diff --bot mybot` first, or commit the local directory before pulling.
+
+Local files may live in subdirectories of the bot directory (`ja/greet.aiml`); Pandorabots' namespace is flat, so the subdirectory is purely a local convention. `pull` writes into the existing path when a file with the same kind and name is already present, and only falls back to the directory root for files that do not exist locally yet. The arrow in the output shows where each file landed:
+
+```
+mybot:
+  ↓ file/greet → ja/greet.aiml
+  ↓ file/farewell → farewell.aiml
+```
 
 Files the server refuses to serve (HTTP 4xx on system-managed files such as `udc`) are skipped with the server's message — see [Error handling](#error-handling).
 

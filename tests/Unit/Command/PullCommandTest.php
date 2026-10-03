@@ -24,7 +24,8 @@ use Symfony\Component\Console\Tester\CommandTester;
  * Verified behaviours:
  *   - Files are written to the configured bot directory
  *   - AIML kind restores the .aiml extension; properties stays as bare "properties"
- *   - --only filters which files are downloaded
+ *   - --only filters which files are downloaded (bare kind selects properties / pdefaults)
+ *   - An existing file in a subdirectory is overwritten in place, not duplicated at the root
  *   - Missing local directory is created on demand
  *   - 404 on getBotFile is reported as a skip and does not abort the pull
  */
@@ -133,6 +134,73 @@ final class PullCommandTest extends TestCase
 
         $paths = array_map(static fn ($t) => $t['request']->getUri()->getPath(), $this->requestHistory);
         $this->assertNotContains('/bot/app-x/mybot/file/farewell', $paths, '--only must avoid the API call for skipped files');
+    }
+
+    public function testOnlyBareKindSelectsProperties(): void
+    {
+        $body = '[["botname", "MyBot"]]';
+        $tester = $this->commandTester('pull', [
+            $this->okGetBotFiles([
+                'files' => [['name' => 'greet.aiml']],
+                'properties' => [['name' => 'properties']],
+            ]),
+            new Response(200, [], $body),
+            // No body queued for greet — must not be requested.
+        ]);
+        $tester->execute([
+            '--config' => $this->configPath,
+            '--bot' => 'mybot',
+            '--only' => 'properties',
+        ]);
+        $tester->assertCommandIsSuccessful();
+
+        $this->assertFileExists($this->localDir . '/properties', '--only=properties must select the bare-name kind');
+        $this->assertSame($body, (string) file_get_contents($this->localDir . '/properties'));
+        $this->assertFileDoesNotExist($this->localDir . '/greet.aiml');
+        $this->assertStringContainsString('Pulled 1 file', $tester->getDisplay());
+    }
+
+    public function testPullWritesIntoExistingSubdirectoryPath(): void
+    {
+        // Local layout keeps greet.aiml under ja/. The remote namespace is
+        // flat, so pull must overwrite ja/greet.aiml rather than create a
+        // second greet.aiml at the root (which push would then reject as a
+        // collision).
+        $existing = "<aiml>same</aiml>\n";
+        mkdir($this->localDir . '/ja', 0o755, true);
+        file_put_contents($this->localDir . '/ja/greet.aiml', $existing);
+        $this->seedCache('mybot', 'file/greet', hash('sha256', $existing));
+
+        $remoteBody = "<aiml>remote</aiml>\n";
+        $tester = $this->commandTester('pull', [
+            $this->okGetBotFiles(['files' => [['name' => 'greet.aiml']]]),
+            new Response(200, [], $remoteBody),
+        ]);
+        $tester->execute(['--config' => $this->configPath, '--bot' => 'mybot']);
+        $tester->assertCommandIsSuccessful();
+
+        $this->assertSame($remoteBody, (string) file_get_contents($this->localDir . '/ja/greet.aiml'));
+        $this->assertFileDoesNotExist($this->localDir . '/greet.aiml', 'pull must not duplicate a nested file at the root');
+        $this->assertStringContainsString('file/greet → ja/greet.aiml', $tester->getDisplay());
+    }
+
+    public function testPullProtectsLocallyEditedFileInSubdirectory(): void
+    {
+        mkdir($this->localDir . '/ja', 0o755, true);
+        file_put_contents($this->localDir . '/ja/greet.aiml', "edited locally\n");
+        $this->seedCache('mybot', 'file/greet', hash('sha256', "before edit\n"));
+
+        // No getBotFile response queued — the skip must happen before download.
+        $tester = $this->commandTester('pull', [
+            $this->okGetBotFiles(['files' => [['name' => 'greet.aiml']]]),
+        ]);
+        $tester->execute(['--config' => $this->configPath, '--bot' => 'mybot']);
+        $tester->assertCommandIsSuccessful();
+
+        $this->assertSame("edited locally\n", (string) file_get_contents($this->localDir . '/ja/greet.aiml'));
+        $this->assertFileDoesNotExist($this->localDir . '/greet.aiml');
+        $this->assertStringContainsString('skip file/greet', $tester->getDisplay());
+        $this->assertStringContainsString('local file edited since last sync', $tester->getDisplay());
     }
 
     public function testSkipsFileWhenServerReturns404(): void

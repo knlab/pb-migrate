@@ -56,7 +56,9 @@ final class StatusCommand extends AbstractBotCommand
         $local = $scanner->scan($bot);
 
         $adds = $updates = 0;
+        $seenKeys = [];
         foreach ($local as $f) {
+            $seenKeys[$f->kind->value . '/' . ($f->kind->hasFilenameInPath() ? $f->name : '')] = true;
             $cached = $cache->get($bot->name, $f->kind, $f->name);
             if ($cached === null) {
                 $adds++;
@@ -65,11 +67,17 @@ final class StatusCommand extends AbstractBotCommand
             }
         }
 
+        // Cache entries with no local file: deleted locally since the last
+        // sync, and what the next `push` would remove from the remote.
+        $deletes = count(array_diff_key($cache->entriesFor($bot->name), $seenKeys));
+
         $localCount = count($local);
 
-        $clean = $adds === 0 && $updates === 0;
+        $clean = $adds === 0 && $updates === 0 && $deletes === 0;
         $statusColor = $clean ? 'green' : 'yellow';
-        $statusLabel = $clean ? '✓ in sync (vs last push)' : sprintf('(+) %d add  (*) %d update', $adds, $updates);
+        $statusLabel = $clean
+            ? '✓ in sync (vs last push)'
+            : sprintf('(+) %d add  (*) %d update  (-) %d delete', $adds, $updates, $deletes);
 
         $io->writeln('');
         $io->writeln($bot->name);

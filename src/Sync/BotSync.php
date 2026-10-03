@@ -159,13 +159,28 @@ final class BotSync
             throw new PullException(sprintf('Could not create local directory: %s', $bot->directory));
         }
 
+        // The scanner is recursive, so a file may live in a subdirectory
+        // (`ja/greet.aiml`). Write into the existing path when there is one;
+        // otherwise a second copy at the directory root would collide with it
+        // on the next push and bypass the local-edit check below.
+        $localByKey = [];
+        foreach ($this->scanner->scan($bot) as $f) {
+            $localByKey[$f->kind->value . '/' . ($f->kind->hasFilenameInPath() ? $f->name : '')] = $f;
+        }
+
         foreach ($remote->all() as $remoteFile) {
             if ($only !== [] && !$this->matchesAny($remoteFile, $only)) {
                 continue;
             }
 
-            $relative = $this->localFilename($remoteFile->kind, $remoteFile->name);
-            $target = $bot->directory . DIRECTORY_SEPARATOR . $relative;
+            $existing = $localByKey[$remoteFile->kind->value . '/' . $remoteFile->name] ?? null;
+            if ($existing !== null) {
+                $target = $existing->path;
+                $relative = $this->relativeTo($bot->directory, $target);
+            } else {
+                $relative = $this->localFilename($remoteFile->kind, $remoteFile->name);
+                $target = $bot->directory . DIRECTORY_SEPARATOR . $relative;
+            }
 
             // Protect un-pushed local edits: if the local file exists and the
             // cache says we last saw a different hash, the user has edited it
@@ -231,12 +246,20 @@ final class BotSync
     private function matchesAny(RemoteFile $remoteFile, array $patterns): bool
     {
         $key = $remoteFile->kind->value . '/' . $remoteFile->name;
+        // Bare-name kinds have an empty name; let `--only properties` select them.
+        $bareKind = $remoteFile->kind->hasFilenameInPath() ? null : $remoteFile->kind->value;
         foreach ($patterns as $p) {
-            if ($p === $remoteFile->name || $p === $key) {
+            if ($p === $remoteFile->name || $p === $key || $p === $bareKind) {
                 return true;
             }
         }
         return false;
+    }
+
+    private function relativeTo(string $base, string $path): string
+    {
+        $prefix = rtrim($base, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+        return str_starts_with($path, $prefix) ? substr($path, strlen($prefix)) : $path;
     }
 
     private function localFilename(FileKind $kind, string $name): string

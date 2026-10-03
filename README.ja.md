@@ -25,7 +25,7 @@
 - `pull` — リモート → ローカル
 - `diff` — ファイル単位差分 (UPD/ADD/DEL グループ + 色)
 - `report` — handoff 用リッチレポート
-- `status` — ローカル ↔ cache (API 不要)
+- `status` — ローカル ↔ cache: 前回 push / pull 以降の追加・編集・削除 (API 不要)
 - `cat` / `file:delete` — リモートの 1 ファイル取得・削除
 - `talk` / `debug` / `atalk` — bot との対話
 - `test` — bot 応答を期待値と照合
@@ -201,6 +201,8 @@ repl                                        対話シェル (default)
 
 `--bot` は完全名のほかに glob (例: `prod.*`) を受け付けます。`--all` で全登録 bot 対象。
 
+`--only` はカンマ区切りで、ファイル名 (`greet`)、`kind/name` (`file/greet`、`set/colors`)、または名前を持たない 2 kind の kind 名そのもの (`properties`、`pdefaults`) を受け付けます。
+
 ## push のセマンティクス
 
 `push` は **デフォルトで破壊的**: ローカルに合わせてリモートを書き換える。リモートにあってローカルに無いファイルは削除されます。これは「ローカル正」モデルの帰結 — ディスク上にあるものが bot にあるべきもの。
@@ -227,6 +229,14 @@ mybot:
 ```
 
 `--force` を付けると無条件に上書きします。リモート版を取り込みつつ自分の編集も残したい場合は、先に `diff --bot mybot` で差分を確認するか、ローカルディレクトリをコミットしてから pull してください。
+
+ローカルのファイルは bot ディレクトリ配下のサブディレクトリに置けます (`ja/greet.aiml`)。Pandorabots 側の名前空間はフラットなので、サブディレクトリは純粋にローカル側の整理です。`pull` は同じ kind と名前のファイルが既にあればそのパスに上書きし、ローカルにまだ存在しないファイルだけをディレクトリ直下に書きます。出力の矢印で、どこに書いたかが分かります:
+
+```
+mybot:
+  ↓ file/greet → ja/greet.aiml
+  ↓ file/farewell → farewell.aiml
+```
 
 サーバーが返してくれないファイル (`udc` など system-managed ファイルの HTTP 4xx) はサーバーのメッセージ付きで skip します — [エラーハンドリング](#エラーハンドリング) を参照。
 

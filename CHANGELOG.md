@@ -6,6 +6,41 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.7.4] — 2026-10-04
+
+Three gaps in the sync layer that the v0.7.3 dogfooding did not reach:
+`--only` could not address the two bare-name kinds at all, `pull` ignored
+the subdirectory a local file lives in and so manufactured the very name
+collision `FileScanner` now rejects, and `status` reported "in sync" after
+a local file had been deleted. This release also carries the README.ja
+sync that landed after v0.7.3 was tagged.
+
+### Fixed
+- `--only properties` / `--only pdefaults` now select those kinds on
+  `push`, `pull`, `diff` and `report`. The two kinds have no name of their
+  own, so neither the `name` nor the `kind/name` form could match them and
+  the option silently selected nothing. A bare kind value only acts this
+  way for kinds without a filename in their URL; `--only file` is still a
+  non-match, not a wildcard.
+- `pull` writes into the existing local path when a file with the same kind
+  and name is already present in a subdirectory (`ja/greet.aiml`). It used
+  to write a second copy at the bot directory root, which `push` then
+  refused as a remote-name collision, and the local-edit protection added
+  in v0.7.3 never saw the nested file. Files with no local counterpart
+  still land at the root as before. The `↓ kind/name → path` line shows
+  the path actually written.
+- `status` counts cache entries with no matching local file as deletes
+  (`(-) N delete`) and no longer reports `✓ in sync` for a tree where a
+  file was removed after the last push / pull. This matches what
+  `report --since=cache` already showed and what the next `push` would
+  remove from the remote.
+
+### Changed
+- README: `--only` accepted forms, pull's subdirectory behaviour, and the
+  `status` summary now mention deletes.
+- README.ja mirrors the v0.7.3 README additions (`pull --force`, Pull
+  semantics, Error handling) and the changes above.
+
 ## [0.7.3] — 2026-10-03
 
 pb-php shipped a security release (2.1.4) that pins patched Guzzle versions

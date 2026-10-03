@@ -15,6 +15,7 @@ use Symfony\Component\Console\Tester\CommandTester;
  * the .pb-migrate-cache.json from the previous push/pull. These tests cover:
  *   - clean state (local matches cache exactly)
  *   - add/update count when something has been touched locally
+ *   - delete count when a cached file no longer exists locally
  *   - --all default behaviour (no --bot, no --all → still operates on every bot)
  */
 final class StatusCommandTest extends TestCase
@@ -108,6 +109,21 @@ final class StatusCommandTest extends TestCase
         $display = $tester->getDisplay();
         $this->assertStringContainsString('(+) 1 add', $display);
         $this->assertStringContainsString('(*) 1 update', $display);
+    }
+
+    public function testReportsDeleteCountWhenCachedFileIsMissingLocally(): void
+    {
+        // The cache remembers greet from the last sync, but the file has
+        // since been removed locally — status must not claim "in sync".
+        $this->seedCacheEntry('mybot', FileKind::File, 'greet', hash('sha256', "<aiml/>\n"));
+
+        $tester = new CommandTester((new Application())->find('status'));
+        $tester->execute(['--config' => $this->configPath, '--bot' => 'mybot']);
+        $tester->assertCommandIsSuccessful();
+
+        $display = $tester->getDisplay();
+        $this->assertStringContainsString('(-) 1 delete', $display);
+        $this->assertStringNotContainsString('in sync', $display);
     }
 
     public function testDefaultsToAllBotsWhenNeitherBotNorAllGiven(): void
