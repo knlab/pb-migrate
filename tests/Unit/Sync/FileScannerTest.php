@@ -165,4 +165,41 @@ final class FileScannerTest extends TestCase
         $this->expectException(\KnLab\PbMigrate\Exception\ConfigException::class);
         (new FileScanner())->scan($bot, ['greet' => '/no/such/file.aiml']);
     }
+
+    public function testScanThrowsOnSameBasenameInDifferentSubdirsSameKind(): void
+    {
+        // Pandorabots uses a flat namespace; `ja/greet.aiml` and `en/greet.aiml`
+        // would both upload as `greet`, silently overwriting each other. Scan
+        // must refuse instead of silently dropping one.
+        mkdir($this->tmpDir . '/ja', 0o755, true);
+        mkdir($this->tmpDir . '/en', 0o755, true);
+        $ja = $this->tmpDir . '/ja/greet.aiml';
+        $en = $this->tmpDir . '/en/greet.aiml';
+        file_put_contents($ja, '<aiml>ja</aiml>');
+        file_put_contents($en, '<aiml>en</aiml>');
+
+        try {
+            (new FileScanner())->scan(new BotConfig('mybot', $this->tmpDir));
+            $this->fail('expected ConfigException on basename collision');
+        } catch (\KnLab\PbMigrate\Exception\ConfigException $e) {
+            $msg = $e->getMessage();
+            $this->assertStringContainsString('file/greet', $msg);
+            $this->assertStringContainsString($ja, $msg, 'message must list the colliding ja path');
+            $this->assertStringContainsString($en, $msg, 'message must list the colliding en path');
+        }
+    }
+
+    public function testScanAllowsSameBasenameAcrossDifferentKinds(): void
+    {
+        // foo.set vs foo.map produce different (kind, name) keys, so they
+        // never collide on the remote — this must NOT trigger the check.
+        mkdir($this->tmpDir . '/a', 0o755, true);
+        mkdir($this->tmpDir . '/b', 0o755, true);
+        file_put_contents($this->tmpDir . '/a/foo.set', 'x');
+        file_put_contents($this->tmpDir . '/b/foo.map', 'y');
+
+        $files = (new FileScanner())->scan(new BotConfig('mybot', $this->tmpDir));
+        $this->assertCount(2, $files);
+    }
+
 }

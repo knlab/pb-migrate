@@ -76,8 +76,37 @@ final class FileScanner
             $files = $this->applyOverrides($files, $overrides);
         }
 
+        $this->ensureNoCollisions($files);
+
         usort($files, static fn (LocalFile $a, LocalFile $b) => strcmp(self::sortKey($a), self::sortKey($b)));
         return $files;
+    }
+
+    /**
+     * @param list<LocalFile> $files
+     */
+    private function ensureNoCollisions(array $files): void
+    {
+        /** @var array<string, list<string>> $byKey */
+        $byKey = [];
+        foreach ($files as $f) {
+            $byKey[self::sortKey($f)][] = $f->path;
+        }
+
+        $collisions = array_filter($byKey, static fn (array $paths): bool => count($paths) > 1);
+        if ($collisions === []) {
+            return;
+        }
+
+        $lines = [];
+        foreach ($collisions as $key => $paths) {
+            $lines[] = sprintf('  %s: %s', $key, implode(', ', $paths));
+        }
+
+        throw new ConfigException(sprintf(
+            "Multiple local files map to the same Pandorabots remote name. The Pandorabots API uses a flat namespace, so files with the same basename in different subdirectories cannot coexist. Rename or consolidate:\n%s",
+            implode("\n", $lines),
+        ));
     }
 
     /**
