@@ -149,10 +149,11 @@ final class BotSync
     /**
      * @param list<string> $only patterns ("name" or "kind/name") to restrict pull to
      */
-    public function pull(BotConfig $bot, SymfonyStyle $io, array $only = []): int
+    public function pull(BotConfig $bot, SymfonyStyle $io, array $only = [], bool $force = false): int
     {
         $remote = RemoteIndex::fromResponse($this->client->getBotFiles($bot->name));
         $count = 0;
+        $skipped = 0;
 
         if (!is_dir($bot->directory) && !mkdir($bot->directory, 0o755, true) && !is_dir($bot->directory)) {
             throw new PullException(sprintf('Could not create local directory: %s', $bot->directory));
@@ -161,6 +162,29 @@ final class BotSync
         foreach ($remote->all() as $remoteFile) {
             if ($only !== [] && !$this->matchesAny($remoteFile, $only)) {
                 continue;
+            }
+
+            $relative = $this->localFilename($remoteFile->kind, $remoteFile->name);
+            $target = $bot->directory . DIRECTORY_SEPARATOR . $relative;
+
+            // Protect un-pushed local edits: if the local file exists and the
+            // cache says we last saw a different hash, the user has edited it
+            // since the last sync. Refuse to overwrite without --force.
+            // No cache entry → fall through (preserves first-pull behaviour).
+            if (!$force && file_exists($target)) {
+                $cachedHash = $this->cache?->get($bot->name, $remoteFile->kind, $remoteFile->name);
+                if ($cachedHash !== null) {
+                    $localHash = hash_file('sha256', $target) ?: '';
+                    if ($localHash !== $cachedHash) {
+                        $io->writeln(sprintf(
+                            '  <comment>skip %s/%s — local file edited since last sync (use --force to overwrite)</comment>',
+                            $remoteFile->kind->value,
+                            $remoteFile->name,
+                        ));
+                        $skipped++;
+                        continue;
+                    }
+                }
             }
 
             try {
@@ -181,9 +205,6 @@ final class BotSync
                 continue;
             }
 
-            $relative = $this->localFilename($remoteFile->kind, $remoteFile->name);
-            $target = $bot->directory . DIRECTORY_SEPARATOR . $relative;
-
             $dir = dirname($target);
             if (!is_dir($dir) && !mkdir($dir, 0o755, true) && !is_dir($dir)) {
                 throw new PullException(sprintf('Could not create directory: %s', $dir));
@@ -194,6 +215,10 @@ final class BotSync
 
             $io->writeln(sprintf('  <fg=cyan>↓</> %s/%s → %s', $remoteFile->kind->value, $remoteFile->name, $relative));
             $count++;
+        }
+
+        if ($skipped > 0) {
+            $io->writeln(sprintf('  <comment>%d file(s) skipped due to local edits</comment>', $skipped));
         }
 
         $this->cache?->save();

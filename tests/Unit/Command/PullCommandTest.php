@@ -169,6 +169,102 @@ final class PullCommandTest extends TestCase
         $this->assertStringContainsString('skip file/udc — server returned HTTP 404 (likely a system-managed file)', $tester->getDisplay());
     }
 
+    public function testPullSkipsLocallyEditedFileWhenCacheHashDiffers(): void
+    {
+        // Seed: local file has been edited since the last sync. The cache still
+        // records the pre-edit hash, so the local hash will not match.
+        mkdir($this->localDir, 0o755, true);
+        file_put_contents($this->localDir . '/greet.aiml', "edited locally\n");
+        $this->seedCache('mybot', 'file/greet', hash('sha256', "before edit\n"));
+
+        // No getBotFile response queued — pull must NOT request the body when
+        // it decides to skip. (MockHandler would error out on an unexpected call.)
+        $tester = $this->commandTester('pull', [
+            $this->okGetBotFiles(['files' => [['name' => 'greet.aiml']]]),
+        ]);
+        $tester->execute(['--config' => $this->configPath, '--bot' => 'mybot']);
+        $tester->assertCommandIsSuccessful();
+
+        $this->assertSame("edited locally\n", (string) file_get_contents($this->localDir . '/greet.aiml'), 'local edits must be preserved');
+        $this->assertStringContainsString('skip file/greet', $tester->getDisplay());
+        $this->assertStringContainsString('local file edited since last sync', $tester->getDisplay());
+        $this->assertStringContainsString('Pulled 0 file', $tester->getDisplay());
+    }
+
+    public function testPullForceOverwritesLocallyEditedFile(): void
+    {
+        mkdir($this->localDir, 0o755, true);
+        file_put_contents($this->localDir . '/greet.aiml', "edited locally\n");
+        $this->seedCache('mybot', 'file/greet', hash('sha256', "before edit\n"));
+
+        $remoteBody = "<aiml>remote</aiml>\n";
+        $tester = $this->commandTester('pull', [
+            $this->okGetBotFiles(['files' => [['name' => 'greet.aiml']]]),
+            new Response(200, [], $remoteBody),
+        ]);
+        $tester->execute(['--config' => $this->configPath, '--bot' => 'mybot', '--force' => true]);
+        $tester->assertCommandIsSuccessful();
+
+        $this->assertSame($remoteBody, (string) file_get_contents($this->localDir . '/greet.aiml'), '--force must overwrite local edits');
+        $this->assertStringContainsString('Pulled 1 file', $tester->getDisplay());
+    }
+
+    public function testPullOverwritesWhenLocalMatchesCachedHash(): void
+    {
+        $existing = "<aiml>same</aiml>\n";
+        mkdir($this->localDir, 0o755, true);
+        file_put_contents($this->localDir . '/greet.aiml', $existing);
+        $this->seedCache('mybot', 'file/greet', hash('sha256', $existing));
+
+        // Local hash matches cache → no local edits → pull through (idempotent).
+        $remoteBody = "<aiml>remote</aiml>\n";
+        $tester = $this->commandTester('pull', [
+            $this->okGetBotFiles(['files' => [['name' => 'greet.aiml']]]),
+            new Response(200, [], $remoteBody),
+        ]);
+        $tester->execute(['--config' => $this->configPath, '--bot' => 'mybot']);
+        $tester->assertCommandIsSuccessful();
+
+        $this->assertSame($remoteBody, (string) file_get_contents($this->localDir . '/greet.aiml'));
+        $this->assertStringContainsString('Pulled 1 file', $tester->getDisplay());
+    }
+
+    public function testPullOverwritesWhenLocalExistsButCacheHasNoEntry(): void
+    {
+        // First-pull scenario: a local file happens to exist (e.g. user dropped
+        // it in manually) but the cache has no record of it. Per the agreed
+        // policy, fall through and write — this preserves the first-pull UX.
+        mkdir($this->localDir, 0o755, true);
+        file_put_contents($this->localDir . '/greet.aiml', "stale local\n");
+        // Intentionally no seedCache() call here.
+
+        $remoteBody = "<aiml>remote</aiml>\n";
+        $tester = $this->commandTester('pull', [
+            $this->okGetBotFiles(['files' => [['name' => 'greet.aiml']]]),
+            new Response(200, [], $remoteBody),
+        ]);
+        $tester->execute(['--config' => $this->configPath, '--bot' => 'mybot']);
+        $tester->assertCommandIsSuccessful();
+
+        $this->assertSame($remoteBody, (string) file_get_contents($this->localDir . '/greet.aiml'));
+        $this->assertStringContainsString('Pulled 1 file', $tester->getDisplay());
+    }
+
+    private function seedCache(string $botname, string $kindAndName, string $sha256): void
+    {
+        $cachePath = $this->tmpDir . '/.pb-migrate-cache.json';
+        file_put_contents($cachePath, (string) json_encode([
+            'version' => 1,
+            'bots' => [
+                $botname => [
+                    'files' => [
+                        $kindAndName => ['sha256' => $sha256],
+                    ],
+                ],
+            ],
+        ], JSON_PRETTY_PRINT | JSON_THROW_ON_ERROR));
+    }
+
     /** @param list<\Psr\Http\Message\ResponseInterface> $responses */
     private function commandTester(string $name, array $responses): CommandTester
     {

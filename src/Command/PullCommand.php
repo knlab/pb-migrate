@@ -21,6 +21,7 @@ final class PullCommand extends AbstractBotCommand
     {
         parent::configure();
         $this->addOption('only', null, InputOption::VALUE_REQUIRED, 'Comma-separated list of names (or kind/name) to pull; everything else is skipped');
+        $this->addOption('force', null, InputOption::VALUE_NONE, 'Overwrite local files even if they have been edited since the last sync');
     }
 
     protected function execute(InputInterface $input, OutputInterface $output): int
@@ -31,6 +32,7 @@ final class PullCommand extends AbstractBotCommand
         $bots = $this->resolveBots($config, $input);
 
         $only = $this->parseOnly((string) ($input->getOption('only') ?? ''));
+        $force = (bool) $input->getOption('force');
 
         $cache = CacheStore::forProjectRoot($config->projectRoot);
         $sync = new BotSync($client, new FileScanner(), new DiffEngine(), $cache);
@@ -38,7 +40,7 @@ final class PullCommand extends AbstractBotCommand
         $total = 0;
         foreach ($bots as $bot) {
             $io->writeln(sprintf('%s:', $bot->name));
-            $count = $sync->pull($bot, $io, $only);
+            $count = $sync->pull($bot, $io, $only, $force);
             $total += $count;
         }
 
