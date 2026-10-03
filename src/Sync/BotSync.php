@@ -81,10 +81,12 @@ final class BotSync
                 // know to filter (DiffEngine has a hardcoded list — this is
                 // for unforeseen additions). 412 = "won't be deleted, ever".
                 if ($e->getStatusCode() === 412) {
+                    $detail = ApiErrorMessage::detail($e);
                     $io->writeln(sprintf(
-                        '  <comment>skip %s/%s — server returned HTTP 412 (system-managed file)</comment>',
+                        '  <comment>skip %s/%s — server returned HTTP 412%s (system-managed file)</comment>',
                         $change->kind->value,
                         $change->name,
+                        $detail === null ? '' : ': ' . OutputFormatter::escape($detail),
                     ));
                     continue;
                 }

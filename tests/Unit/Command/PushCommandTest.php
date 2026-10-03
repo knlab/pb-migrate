@@ -155,6 +155,46 @@ final class PushCommandTest extends TestCase
         $this->assertContains('DELETE', $methods, 'default push behaviour must delete remote-only files');
     }
 
+    public function testSkipsDeleteOnHttp412AndShowsServerMessage(): void
+    {
+        // A remote-only file the server refuses to delete (412) must be
+        // skipped with the server's explanation, and the push continues.
+        $tester = $this->commandTester('push', [
+            $this->okGetBotFiles(['files' => [['name' => 'greet.aiml']]]),
+            new Response(412, [], '{"status":"error","message":"system file cannot be deleted"}'),  // delete greet
+            $this->okStatus(),  // compile
+        ]);
+        $tester->execute([
+            '--config' => $this->configPath,
+            '--bot' => 'mybot',
+        ]);
+        $tester->assertCommandIsSuccessful();
+
+        $this->assertStringContainsString(
+            'skip file/greet — server returned HTTP 412: system file cannot be deleted (system-managed file)',
+            $tester->getDisplay(),
+        );
+    }
+
+    public function testSkipLineOn412OmitsServerMessageWhenBodyHasNone(): void
+    {
+        $tester = $this->commandTester('push', [
+            $this->okGetBotFiles(['files' => [['name' => 'greet.aiml']]]),
+            new Response(412, [], ''),  // delete greet
+            $this->okStatus(),  // compile
+        ]);
+        $tester->execute([
+            '--config' => $this->configPath,
+            '--bot' => 'mybot',
+        ]);
+        $tester->assertCommandIsSuccessful();
+
+        $this->assertStringContainsString(
+            'skip file/greet — server returned HTTP 412 (system-managed file)',
+            $tester->getDisplay(),
+        );
+    }
+
     public function testKeepRemoteOnlyPreservesRemoteOnlyFiles(): void
     {
         $tester = $this->commandTester('push', [
