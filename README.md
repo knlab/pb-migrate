@@ -274,6 +274,28 @@ pb-migrate push --bot mybot
 
 To avoid re-fetching every remote file on every `push` / `diff`, pb-migrate maintains a JSON cache (`.pb-migrate-cache.json`, gitignored) of the SHA-256 of each file at the time of the last successful push or pull. Pass `--verify-remote` to bypass the cache when you suspect dashboard edits or cache corruption.
 
+## Error handling
+
+API failures surface as `Spontena\PbPhp\Exception\ApiException`. Since pb-php 2.1.4 its message carries only the HTTP status and the request method/path — never the query string (which holds `user_key` / `botkey`) and never the raw response body. pb-migrate re-attaches the server's own explanation (the `message` field of the JSON error body) wherever an error is shown, so you still see *why* a call failed:
+
+```
+# REPL, batch, test
+Pandorabots API returned HTTP 404 for GET https://api.pandorabots.com/bot/<app_id>/mybot — bot not found
+
+# direct CLI run (Symfony error block, then the server message)
+  Pandorabots API returned HTTP 404 for GET https://api.pandorabots.com/bot/<app_id>/mybot
+
+Server message: bot not found
+
+# push / pull skip lines
+  skip file/udc — server returned HTTP 404: not found (likely a system-managed file)
+  skip file/udc — server returned HTTP 412: system file cannot be deleted (system-managed file)
+```
+
+When the body carries no usable `message` (empty, non-JSON, or a non-string field), the line is shown without the trailing detail. Transport failures (DNS, timeout, TLS) keep the standard Guzzle exception types with a fixed message and the numeric cURL error code; the original URL-bearing message is intentionally dropped.
+
+Exception messages, stack traces, and the `-v` / `-vvv` output never include credentials. If you log exception traces yourself on PHP 8.1, set `zend.exception_ignore_args=On`; on PHP 8.2+ pb-php marks its sensitive parameters with `#[\SensitiveParameter]`. Do not dump whole exception objects or Guzzle request/response accessors — those can still contain the raw query string or conversation text.
+
 ## Testing the code
 
 ```bash
