@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace KnLab\PbMigrate\Command;
 
 use KnLab\PbMigrate\Config\BotConfig;
+use KnLab\PbMigrate\Exception\ApiErrorMessage;
 use Spontena\PbPhp\PBClient;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -188,7 +189,7 @@ final class TestCommand extends AbstractBotCommand
                 clientName: $clientName,
             );
         } catch (\Throwable $e) {
-            $io->writeln(sprintf('<fg=yellow>FAIL</> %s "%s" — %s', $bot->name, $inputText, $e->getMessage()));
+            $io->writeln(sprintf('<fg=yellow>FAIL</> %s "%s" — %s', $bot->name, $inputText, ApiErrorMessage::describe($e)));
             return false;
         }
 

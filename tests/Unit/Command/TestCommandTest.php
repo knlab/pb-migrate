@@ -20,6 +20,7 @@ use Symfony\Component\Console\Tester\CommandTester;
  *   - --file form with multiple cases, mix of pass and fail
  *   - non-zero exit code on any mismatch (CI integration contract)
  *   - rejects when neither inline nor --file provided
+ *   - API error (e.g. HTTP 404) shows the server message in the FAIL line
  */
 final class TestCommandTest extends TestCase
 {
@@ -164,6 +165,28 @@ final class TestCommandTest extends TestCase
     /**
      * @param list<string> $replies one Pandorabots /talk response per case.
      */
+    public function testApiErrorShowsServerMessageInFailLine(): void
+    {
+        $http = new Client(['handler' => HandlerStack::create(new MockHandler([
+            new Response(404, [], '{"status":"error","message":"bot not found"}'),
+        ]))]);
+        $app = new Application('pb-migrate', '0.1.0', new PBClientFactory($http));
+
+        $tester = new CommandTester($app->find('test'));
+        $tester->execute([
+            '--config' => $this->configPath,
+            '--bot' => 'mybot',
+            '--input' => 'HELLO',
+            '--expect' => 'Hello, world.',
+        ]);
+
+        $this->assertNotSame(0, $tester->getStatusCode());
+        $display = $tester->getDisplay();
+        $this->assertStringContainsString('FAIL mybot "HELLO"', $display);
+        $this->assertStringContainsString('HTTP 404', $display);
+        $this->assertStringContainsString('bot not found', $display, 'server detail from the response body must be surfaced');
+    }
+
     private function appWithTalkResponses(array $replies): Application
     {
         $responses = [];

@@ -4,8 +4,11 @@ declare(strict_types=1);
 
 namespace KnLab\PbMigrate;
 
+use KnLab\PbMigrate\Exception\ApiErrorMessage;
 use Symfony\Component\Console\Application as BaseApplication;
+use Symfony\Component\Console\Formatter\OutputFormatter;
 use Symfony\Component\Console\Input\InputInterface;
+use Symfony\Component\Console\Output\OutputInterface;
 
 final class Application extends BaseApplication
 {
@@ -48,6 +51,25 @@ final class Application extends BaseApplication
             return 'repl';
         }
         return $first;
+    }
+
+    /**
+     * Symfony renders only getMessage(), which for ApiException no longer
+     * carries the server's explanation (pb-php >= 2.1.4). Append it so a
+     * direct CLI run shows the same detail the REPL does.
+     */
+    protected function doRenderThrowable(\Throwable $e, OutputInterface $output): void
+    {
+        parent::doRenderThrowable($e, $output);
+
+        $detail = ApiErrorMessage::detail($e);
+        if ($detail !== null) {
+            $output->writeln(
+                sprintf('<comment>Server message: %s</comment>', OutputFormatter::escape($detail)),
+                OutputInterface::VERBOSITY_QUIET,
+            );
+            $output->writeln('', OutputInterface::VERBOSITY_QUIET);
+        }
     }
 
     /**

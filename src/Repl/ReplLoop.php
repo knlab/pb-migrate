@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace KnLab\PbMigrate\Repl;
 
+use KnLab\PbMigrate\Exception\ApiErrorMessage;
 use Symfony\Component\Console\Application;
 use Symfony\Component\Console\Input\StringInput;
 use Symfony\Component\Console\Output\OutputInterface;
@@ -72,7 +73,7 @@ final class ReplLoop
             try {
                 $this->app->doRun(new StringInput(self::normaliseChatInput($resolved)), $output);
             } catch (\Throwable $e) {
-                $output->writeln(sprintf('<error>%s</error>', $e->getMessage()));
+                $output->writeln(sprintf('<error>%s</error>', ApiErrorMessage::describe($e)));
             }
         }
 

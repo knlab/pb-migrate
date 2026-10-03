@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace KnLab\PbMigrate\Command;
 
+use KnLab\PbMigrate\Exception\ApiErrorMessage;
 use KnLab\PbMigrate\Repl\RunbookParser;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -65,7 +66,7 @@ final class BatchCommand extends Command
                 }
             } catch (\Throwable $e) {
                 $failed++;
-                $output->writeln(sprintf('<error>batch: %s</error>', $e->getMessage()));
+                $output->writeln(sprintf('<error>batch: %s</error>', ApiErrorMessage::describe($e)));
                 if (!$continueOnError) {
                     return Command::FAILURE;
                 }
