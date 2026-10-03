@@ -5,10 +5,12 @@ declare(strict_types=1);
 namespace KnLab\PbMigrate\Sync;
 
 use KnLab\PbMigrate\Config\BotConfig;
+use KnLab\PbMigrate\Exception\ApiErrorMessage;
 use KnLab\PbMigrate\Exception\PullException;
 use Spontena\PbPhp\Exception\ApiException;
 use Spontena\PbPhp\FileKind;
 use Spontena\PbPhp\PBClient;
+use Symfony\Component\Console\Formatter\OutputFormatter;
 use Symfony\Component\Console\Style\SymfonyStyle;
 
 final class BotSync
@@ -166,11 +168,13 @@ final class BotSync
                     name: $remoteFile->kind->hasFilenameInPath() ? $remoteFile->name : null,
                 );
             } catch (ApiException $e) {
+                $detail = ApiErrorMessage::detail($e);
                 $io->writeln(sprintf(
-                    '  <comment>skip %s/%s — server returned HTTP %d (likely a system-managed file)</comment>',
+                    '  <comment>skip %s/%s — server returned HTTP %d%s (likely a system-managed file)</comment>',
                     $remoteFile->kind->value,
                     $remoteFile->name,
                     $e->getStatusCode(),
+                    $detail === null ? '' : ': ' . OutputFormatter::escape($detail),
                 ));
                 continue;
             }

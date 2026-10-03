@@ -152,7 +152,21 @@ final class PullCommandTest extends TestCase
 
         $this->assertFileExists($this->localDir . '/greet.aiml');
         $this->assertFileDoesNotExist($this->localDir . '/udc.aiml', 'a 404 must skip the file, not crash the pull');
-        $this->assertStringContainsString('skip file/udc', $tester->getDisplay());
+        $this->assertStringContainsString('skip file/udc — server returned HTTP 404: not found', $tester->getDisplay());
+    }
+
+    public function testSkipLineOmitsServerMessageWhenBodyHasNone(): void
+    {
+        $tester = $this->commandTester('pull', [
+            $this->okGetBotFiles(['files' => [
+                ['name' => 'udc'],
+            ]]),
+            new Response(404, [], '<html>Not Found</html>'),
+        ]);
+        $tester->execute(['--config' => $this->configPath, '--bot' => 'mybot']);
+        $tester->assertCommandIsSuccessful();
+
+        $this->assertStringContainsString('skip file/udc — server returned HTTP 404 (likely a system-managed file)', $tester->getDisplay());
     }
 
     /** @param list<\Psr\Http\Message\ResponseInterface> $responses */
