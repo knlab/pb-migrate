@@ -173,6 +173,7 @@ push  [--bot ...|--all] [--dry-run]         ローカル → リモート (デ�
                         [-i|--interactive]
                         [--properties-upload=additive|full]
 pull  [--bot ...|--all] [--only=...]        bot のファイルをローカルに展開
+                        [--force]           (ローカル編集済みは skip; --force で上書き)
 diff  [--bot ...|--all] [--verify-remote]   ファイル単位 UPD/ADD/DEL グループ
                         [--only=...]
 status [--bot ...|--all]                    ローカル ↔ cache (API 不要)
@@ -207,6 +208,27 @@ repl                                        対話シェル (default)
 リモート側のみのファイルを残したい (例: 他のメンバーがダッシュボードから足したファイル) 場合は `--keep-remote-only` を付けてください。
 
 `udc` のような Pandorabots 管理ファイルは API の制約 (412) で削除不可なので、モードに関わらず警告 skip で続行します。
+
+## pull のセマンティクス
+
+`pull` はリモートのファイルをローカルに書き出しますが、まだ push していない編集を黙って捨てることはしません。各ファイルについて、ローカルの SHA-256 と、前回の push / pull 成功時に [ローカル cache](#ローカル-cache) へ記録したハッシュを比較します:
+
+| ローカルファイル | cache の記録 | 結果 |
+|---|---|---|
+| ハッシュが cache と一致 | あり | 上書き (前回同期以降の編集なし) |
+| ハッシュが cache と不一致 | あり | **skip** して警告 — ローカルで編集済み |
+| 存在する | なし | 上書き (初回 pull、または手動で置いたファイル) |
+| 存在しない | — | 書き込み |
+
+```
+mybot:
+  skip file/greet — local file edited since last sync (use --force to overwrite)
+  1 file(s) skipped due to local edits
+```
+
+`--force` を付けると無条件に上書きします。リモート版を取り込みつつ自分の編集も残したい場合は、先に `diff --bot mybot` で差分を確認するか、ローカルディレクトリをコミットしてから pull してください。
+
+サーバーが返してくれないファイル (`udc` など system-managed ファイルの HTTP 4xx) はサーバーのメッセージ付きで skip します — [エラーハンドリング](#エラーハンドリング) を参照。
 
 ## diff と report
 
@@ -271,6 +293,28 @@ pb-migrate push --bot mybot
 ## ローカル cache
 
 毎回リモート全ファイルを取得しないよう、`push` / `diff` は前回成功時の SHA-256 を `.pb-migrate-cache.json` (gitignore) に記録します。ダッシュボード経由での編集が疑われる時は `--verify-remote` でキャッシュをバイパスして実機照合できます。
+
+## エラーハンドリング
+
+API の失敗は `Spontena\PbPhp\Exception\ApiException` として上がってきます。pb-php 2.1.4 以降、そのメッセージに含まれるのは HTTP ステータスとリクエストのメソッド/パスだけで、クエリ文字列 (`user_key` / `botkey` を含む) やレスポンス本文は含まれません。pb-migrate はエラーを表示する箇所すべてで、サーバー自身の説明 (JSON エラー本文の `message` フィールド) を付け直すので、*なぜ* 失敗したかは引き続き分かります:
+
+```
+# REPL, batch, test
+Pandorabots API returned HTTP 404 for GET https://api.pandorabots.com/bot/<app_id>/mybot — bot not found
+
+# 直接 CLI 実行 (Symfony のエラーブロックの後にサーバーメッセージ)
+  Pandorabots API returned HTTP 404 for GET https://api.pandorabots.com/bot/<app_id>/mybot
+
+Server message: bot not found
+
+# push / pull の skip 行
+  skip file/udc — server returned HTTP 404: not found (likely a system-managed file)
+  skip file/udc — server returned HTTP 412: system file cannot be deleted (system-managed file)
+```
+
+本文に使える `message` が無い場合 (空、JSON でない、文字列でないフィールド) は、末尾の詳細なしで表示されます。トランスポート系の失敗 (DNS、タイムアウト、TLS) は Guzzle 標準の例外型のまま、固定メッセージと cURL のエラー番号だけになります。URL を含む元のメッセージは意図的に落としています。
+
+例外メッセージ、スタックトレース、`-v` / `-vvv` の出力に認証情報が含まれることはありません。自分で例外トレースをログに出す場合、PHP 8.1 では `zend.exception_ignore_args=On` を設定してください。PHP 8.2+ では pb-php が機密パラメータに `#[\SensitiveParameter]` を付けています。例外オブジェクト全体や Guzzle のリクエスト/レスポンスのアクセサをそのまま dump しないでください — 生のクエリ文字列や会話テキストが含まれることがあります。
 
 ## テスト
 
