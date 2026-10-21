@@ -35,9 +35,19 @@ Command-line tool to manage existing AIML packages on [Pandorabots](https://www.
 
 ## Requirements
 
-- PHP 8.1+
+- PHP 8.1+ (8.3+ recommended — see below)
 - ext-json
 - Composer
+
+> **PHP 8.1 is end of life.** PHP 8.1 stopped receiving security fixes on
+> 31 December 2025 and is not covered by later PHP security releases, including
+> the critical PHP security release of October 2026. PHP 8.2 reaches end of life
+> on 31 December 2026. Run pb-migrate on a supported PHP version — 8.3 or newer
+> is recommended — and keep it on the latest patch release. Updating pb-migrate
+> does not patch the PHP runtime. See <https://www.php.net/supported-versions.php>.
+>
+> pb-migrate 0.7.x continues to install on PHP 8.1 and 8.2, but support for them
+> is deprecated. pb-migrate 0.8 will require PHP 8.3 or newer.
 
 ## Installation
 
@@ -342,7 +352,7 @@ The integration suite hits the real Pandorabots API and is **not** run by defaul
 PB_APP_ID=xxx PB_USER_KEY=yyy composer test:integration
 ```
 
-CI runs the unit suite on PHP 8.1 / 8.2 / 8.3 / 8.4 — see `.github/workflows/ci.yml`.
+CI runs the unit suite on PHP 8.1 / 8.2 / 8.3 / 8.4 / 8.5 — see `.github/workflows/ci.yml`.
 
 ## License
 

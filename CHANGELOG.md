@@ -6,6 +6,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.7.5] — 2026-10-21
+
+Documentation release ahead of the critical PHP security release of
+October 2026 (scheduled 2026-10-21 14:00 UTC, two vulnerabilities rated
+CVSS v4.0 9.2). PHP 8.1 reached end of life on 31 December 2025 and does
+not receive these fixes, but pb-migrate still installs on it. This release
+documents the risk and deprecates PHP 8.1 / 8.2; the `"php": "^8.1"`
+constraint stays for 0.7.x.
+
+### Security
+- README: PHP 8.1 is end of life and unpatched, including the critical PHP
+  security release of October 2026. PHP 8.3 or newer is recommended; PHP
+  8.2 reaches end of life on 31 December 2026. Updating pb-migrate does not
+  patch the PHP runtime — upgrade PHP itself to the latest patch release of
+  a supported branch.
+
+### Deprecated
+- Support for PHP 8.1 and 8.2. The next minor release, 0.8, will require
+  PHP `^8.3`. No commands, options, or runtime behaviour change in this
+  release.
+
+### Changed
+- CI also runs the unit suite on PHP 8.5.
+
 ## [0.7.4] — 2026-10-04
 
 Three gaps in the sync layer that the v0.7.3 dogfooding did not reach:
