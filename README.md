@@ -35,19 +35,12 @@ Command-line tool to manage existing AIML packages on [Pandorabots](https://www.
 
 ## Requirements
 
-- PHP 8.1+ (8.3+ recommended — see below)
+- PHP 8.3+ — keep it on the latest patch release of a
+  [supported branch](https://www.php.net/supported-versions.php)
 - ext-json
 - Composer
 
-> **PHP 8.1 is end of life.** PHP 8.1 stopped receiving security fixes on
-> 31 December 2025 and is not covered by later PHP security releases, including
-> the critical PHP security release of October 2026. PHP 8.2 reaches end of life
-> on 31 December 2026. Run pb-migrate on a supported PHP version — 8.3 or newer
-> is recommended — and keep it on the latest patch release. Updating pb-migrate
-> does not patch the PHP runtime. See <https://www.php.net/supported-versions.php>.
->
-> pb-migrate 0.7.x continues to install on PHP 8.1 and 8.2, but support for them
-> is deprecated. pb-migrate 0.8 will require PHP 8.3 or newer.
+pb-migrate 0.8 and later require PHP 8.3 or newer. On PHP 8.1 or 8.2, Composer keeps installs on 0.7.5, the last release that supports them. PHP 8.1 no longer receives security fixes and PHP 8.2 reaches end of life on 31 December 2026, so upgrading PHP is recommended.
 
 ## Installation
 
@@ -336,7 +329,7 @@ Server message: bot not found
 
 When the body carries no usable `message` (empty, non-JSON, or a non-string field), the line is shown without the trailing detail. Transport failures (DNS, timeout, TLS) keep the standard Guzzle exception types with a fixed message and the numeric cURL error code; the original URL-bearing message is intentionally dropped.
 
-Exception messages, stack traces, and the `-v` / `-vvv` output never include credentials. If you log exception traces yourself on PHP 8.1, set `zend.exception_ignore_args=On`; on PHP 8.2+ pb-php marks its sensitive parameters with `#[\SensitiveParameter]`. Do not dump whole exception objects or Guzzle request/response accessors — those can still contain the raw query string or conversation text.
+Exception messages, stack traces, and the `-v` / `-vvv` output never include credentials. If you log exception traces yourself, set `zend.exception_ignore_args=On`; pb-php also marks its sensitive parameters with `#[\SensitiveParameter]`. Do not dump whole exception objects or Guzzle request/response accessors — those can still contain the raw query string or conversation text.
 
 ## Testing the code
 
@@ -352,7 +345,7 @@ The integration suite hits the real Pandorabots API and is **not** run by defaul
 PB_APP_ID=xxx PB_USER_KEY=yyy composer test:integration
 ```
 
-CI runs the unit suite on PHP 8.1 / 8.2 / 8.3 / 8.4 / 8.5 — see `.github/workflows/ci.yml`.
+CI runs the unit suite on PHP 8.3 / 8.4 / 8.5 — see `.github/workflows/ci.yml`.
 
 ## License
 

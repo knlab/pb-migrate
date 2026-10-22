@@ -35,19 +35,11 @@
 
 ## 動作要件
 
-- PHP 8.1 以上 (8.3 以上を推奨 — 下記参照)
+- PHP 8.3 以上 — [サポート中のブランチ](https://www.php.net/supported-versions.php)の最新パッチリリースに保ってください
 - ext-json
 - Composer
 
-> **PHP 8.1 はサポート終了 (EOL) です。** PHP 8.1 は 2025 年 12 月 31 日でセキュリティ
-> 修正の提供が終わっており、2026 年 10 月の重大なセキュリティリリースを含め、以後の
-> PHP セキュリティリリースの対象外です。PHP 8.2 も 2026 年 12 月 31 日に EOL を迎えます。
-> pb-migrate はサポート中の PHP (8.3 以上を推奨) で、最新のパッチリリースに保って
-> 実行してください。pb-migrate を更新しても PHP 本体は修正されません。
-> <https://www.php.net/supported-versions.php> を参照してください。
->
-> pb-migrate 0.7.x は引き続き PHP 8.1 / 8.2 にインストールできますが、これらのサポートは
-> 非推奨です。pb-migrate 0.8 では PHP 8.3 以上が必須になります。
+pb-migrate 0.8 以降は PHP 8.3 以上が必須です。PHP 8.1 / 8.2 では、Composer はそれらをサポートする最後のリリースである 0.7.5 を入れます。PHP 8.1 はすでにセキュリティ修正が提供されておらず、PHP 8.2 も 2026 年 12 月 31 日に EOL を迎えるため、PHP の更新を推奨します。
 
 ## インストール
 
@@ -334,7 +326,7 @@ Server message: bot not found
 
 本文に使える `message` が無い場合 (空、JSON でない、文字列でないフィールド) は、末尾の詳細なしで表示されます。トランスポート系の失敗 (DNS、タイムアウト、TLS) は Guzzle 標準の例外型のまま、固定メッセージと cURL のエラー番号だけになります。URL を含む元のメッセージは意図的に落としています。
 
-例外メッセージ、スタックトレース、`-v` / `-vvv` の出力に認証情報が含まれることはありません。自分で例外トレースをログに出す場合、PHP 8.1 では `zend.exception_ignore_args=On` を設定してください。PHP 8.2+ では pb-php が機密パラメータに `#[\SensitiveParameter]` を付けています。例外オブジェクト全体や Guzzle のリクエスト/レスポンスのアクセサをそのまま dump しないでください — 生のクエリ文字列や会話テキストが含まれることがあります。
+例外メッセージ、スタックトレース、`-v` / `-vvv` の出力に認証情報が含まれることはありません。自分で例外トレースをログに出す場合は `zend.exception_ignore_args=On` を設定してください。pb-php も機密パラメータに `#[\SensitiveParameter]` を付けています。例外オブジェクト全体や Guzzle のリクエスト/レスポンスのアクセサをそのまま dump しないでください — 生のクエリ文字列や会話テキストが含まれることがあります。
 
 ## テスト
 
@@ -350,7 +342,7 @@ Integration スイートは実 Pandorabots API に対して走り、デフォル
 PB_APP_ID=xxx PB_USER_KEY=yyy composer test:integration
 ```
 
-CI は PHP 8.1 / 8.2 / 8.3 / 8.4 / 8.5 で unit スイートを実行します — 詳細は `.github/workflows/ci.yml`。
+CI は PHP 8.3 / 8.4 / 8.5 で unit スイートを実行します — 詳細は `.github/workflows/ci.yml`。
 
 ## ライセンス
 

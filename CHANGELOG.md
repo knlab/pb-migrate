@@ -6,6 +6,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.8.0] — 2026-10-22
+
+Requires PHP 8.3 or newer, as announced in 0.7.5. pb-php 2.2.0 raised its
+own minimum to PHP 8.3 in a minor release with no API changes, and this
+release requires it. Composer's platform check keeps PHP 8.1 / 8.2
+installs on 0.7.5. No commands, options, or runtime behaviour change.
+
+### Removed (breaking)
+- Support for PHP 8.1 and 8.2, deprecated in 0.7.5. The required PHP
+  version is now `^8.3` (was `^8.1`). PHP 8.1 reached end of life on
+  31 December 2025 and does not receive PHP security fixes, including
+  CVE-2026-109618 and CVE-2026-109619 (fixed in PHP 8.2.35, 8.3.36,
+  8.4.27 and 8.5.12). PHP 8.2 reaches end of life on 31 December 2026.
+
+### Changed
+- Require `spontena/pb-php ^2.2` (was `^2.1.4`). pb-php 2.2.0 has no
+  `src/` changes from 2.1.4; it only raises the PHP requirement.
+- CI matrix now covers PHP 8.3 / 8.4 / 8.5.
+- README / README.ja: Requirements say PHP 8.3+ and that PHP 8.1 / 8.2
+  stay on 0.7.5; the logging note no longer carries the PHP 8.1 caveat.
+
 ## [0.7.5] — 2026-10-21
 
 Documentation release ahead of the critical PHP security release of
