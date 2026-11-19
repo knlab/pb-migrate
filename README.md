@@ -345,7 +345,7 @@ The integration suite hits the real Pandorabots API and is **not** run by defaul
 PB_APP_ID=xxx PB_USER_KEY=yyy composer test:integration
 ```
 
-CI runs the unit suite on PHP 8.3 / 8.4 / 8.5 — see `.github/workflows/ci.yml`.
+CI runs the unit suite on PHP 8.3 / 8.4 / 8.5 / 8.6 — see `.github/workflows/ci.yml`.
 
 ## License
 

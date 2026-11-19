@@ -342,7 +342,7 @@ Integration スイートは実 Pandorabots API に対して走り、デフォル
 PB_APP_ID=xxx PB_USER_KEY=yyy composer test:integration
 ```
 
-CI は PHP 8.3 / 8.4 / 8.5 で unit スイートを実行します — 詳細は `.github/workflows/ci.yml`。
+CI は PHP 8.3 / 8.4 / 8.5 / 8.6 で unit スイートを実行します — 詳細は `.github/workflows/ci.yml`。
 
 ## ライセンス
 

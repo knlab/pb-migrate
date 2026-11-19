@@ -6,6 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Changed
+- CI matrix now also covers PHP 8.6, released on 19 November 2026. The
+  `^8.3` constraint already allows it; no code changes.
+- CI uses `actions/checkout@v7` and `actions/cache@v6`, which run on
+  Node.js 24. GitHub has deprecated Node.js 20 on Actions runners.
+
 ## [0.8.0] — 2026-10-22
 
 Requires PHP 8.3 or newer, as announced in 0.7.5. pb-php 2.2.0 raised its
