@@ -6,11 +6,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.8.1] — 2026-11-21
+
+Final release. Pandorabots has wound down its developer hosting platform,
+so the Developer Portal API that pb-migrate drives is no longer
+available, and pb-php, the client library it is built on, was marked
+abandoned in 2.3.1. This release documents that and marks pb-migrate as
+abandoned too. No code changes.
+
+### Deprecated
+- pb-migrate is deprecated and no longer maintained. README / README.ja
+  open with a notice that says which commands still run (the local ones,
+  such as `add`, `status`, `alter:*` and `report --since=cache`) and
+  points to the open-source AIML interpreters that Pandorabots
+  recommends. `composer.json` marks the package as abandoned, so Composer
+  warns on install.
+
 ### Changed
 - CI matrix now also covers PHP 8.6, released on 19 November 2026. The
   `^8.3` constraint already allows it; no code changes.
 - CI uses `actions/checkout@v7` and `actions/cache@v6`, which run on
   Node.js 24. GitHub has deprecated Node.js 20 on Actions runners.
+
+### Notes
+- Fresh installs now resolve pb-php 2.3.x, which accepts Guzzle 7.16+ or
+  Guzzle 8. The unit suite and PHPStan pass with both.
 
 ## [0.8.0] — 2026-10-22
 

@@ -4,6 +4,7 @@
     "keywords": ["pandorabots", "aiml", "cli", "chatbot", "migration"],
     "type": "project",
     "license": "MIT",
+    "abandoned": true,
     "authors": [
         {
             "name": "knlab",

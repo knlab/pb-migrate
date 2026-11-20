@@ -14,7 +14,7 @@ final class Application extends BaseApplication
 {
     public function __construct(
         string $name = 'pb-migrate',
-        string $version = '0.8.0',
+        string $version = '0.8.1',
         ?PBClientFactory $factory = null,
     ) {
         parent::__construct($name, $version);

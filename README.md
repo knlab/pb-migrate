@@ -2,6 +2,31 @@
 
 [日本語版 / Japanese](README.ja.md)
 
+> [!WARNING]
+> **Pandorabots has shut down its developer hosting platform, so pb-migrate no
+> longer works.** In 2026 Pandorabots wound down the hosted bot service and the
+> Developer Portal API (`api.pandorabots.com`) that pb-migrate drives through
+> [pb-php](https://github.com/spontena/pb-php); its website now carries a
+> "Hosting Service Sunset" notice, and pb-php is abandoned as well. pb-migrate is
+> no longer maintained, and 0.8.1 is its final release.
+>
+> `push`, `pull`, `diff`, `talk`, and every other command that calls the API now
+> fail with a connection error. Local commands such as `add`, `status`,
+> `alter:*`, and `report --since=cache` still run, and your AIML files remain
+> plain files that you can load into another AIML interpreter.
+>
+> To keep running AIML bots, Pandorabots points to open-source AIML interpreters:
+> [Program AB](https://code.google.com/archive/p/program-ab/) (Java, AIML 2.0
+> reference implementation), [Program-Y](https://github.com/keiffster/program-y)
+> (Python), [aimlinterpreter](https://www.npmjs.com/package/aimlinterpreter)
+> (Node.js), and community projects such as Program O (PHP) listed under
+> [github.com/pandorabots](https://github.com/pandorabots). The AIML
+> specification is at [aiml.foundation](http://www.aiml.foundation/). Customers
+> who missed the migration window can contact <support@pandorabots.com>.
+>
+> The rest of this README describes the tool as it worked while the service was
+> available.
+
 Command-line tool to manage existing AIML packages on [Pandorabots](https://www.pandorabots.com/), built on top of [`spontena/pb-php`](https://github.com/spontena/pb-php).
 
 `pb-migrate` is the OSS rewrite of an in-house deployment CLI. The tool treats your local AIML files as the source of truth, registers existing package directories, and pushes them to Pandorabots' Developer Portal API.

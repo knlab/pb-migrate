@@ -2,6 +2,31 @@
 
 [English version](README.md)
 
+> [!WARNING]
+> **Pandorabots が開発者向けホスティングを終了したため、pb-migrate はもう動作しません。**
+> 2026 年に Pandorabots はホスティング型のボットサービスと、pb-migrate が
+> [pb-php](https://github.com/spontena/pb-php) 経由で使っていた Developer Portal API
+> (`api.pandorabots.com`) を終了しました。公式サイトには "Hosting Service Sunset" の
+> 告知が出ており、pb-php もメンテナンスを終了しています。pb-migrate もメンテナンスを
+> 終了し、0.8.1 が最終リリースです。
+>
+> `push`、`pull`、`diff`、`talk` など API を呼ぶコマンドは、すべて接続エラーになります。
+> `add`、`status`、`alter:*`、`report --since=cache` のようなローカルで完結するコマンドは
+> 引き続き動きます。手元の AIML ファイルは普通のファイルなので、別の AIML インタプリタに
+> そのまま読み込めます。
+>
+> AIML ボットを動かし続けるには、Pandorabots が案内しているオープンソースの AIML
+> インタプリタを使ってください:
+> [Program AB](https://code.google.com/archive/p/program-ab/) (Java、AIML 2.0 の
+> リファレンス実装)、[Program-Y](https://github.com/keiffster/program-y) (Python)、
+> [aimlinterpreter](https://www.npmjs.com/package/aimlinterpreter) (Node.js)、
+> [github.com/pandorabots](https://github.com/pandorabots) に挙がっている Program O
+> (PHP) などのコミュニティプロジェクト。AIML の仕様は
+> [aiml.foundation](http://www.aiml.foundation/) にあります。移行期間を逃した利用者は
+> <support@pandorabots.com> に問い合わせできます。
+>
+> 以下の内容は、サービスが提供されていた当時の動作を説明したものです。
+
 既存の AIML パッケージを [Pandorabots](https://www.pandorabots.com/) に展開するためのコマンドラインツール。HTTP クライアントには [`spontena/pb-php`](https://github.com/spontena/pb-php) を使用。
 
 `pb-migrate` は社内で使われていたデプロイ CLI を OSS として書き直したものです。Pandorabots Developer Portal API を対象とし、ローカルの AIML を source of truth とする運用を前提としています。
